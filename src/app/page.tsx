@@ -1,69 +1,248 @@
-import Image from "next/image";
+'use client';
+
+import React, { useState } from 'react';
+import dynamic from 'next/dynamic';
+import { 
+  Play, Pause, RotateCcw, 
+  Map as MapIcon, Plane, Car, Palette, MapPin, Settings, Download, Camera, Check, Search, Gauge, Mountain
+} from 'lucide-react';
+import { Video } from 'lucide-react';
+import { useEditorState } from '@/hooks/useEditorState';
+import GlobeMap from '@/components/GlobeMap';
+import AnimationsPanel from '@/components/panels/AnimationsPanel';
+import CameraPanel from '@/components/panels/CameraPanel';
+import MapPanel from '@/components/panels/MapPanel';
+
+const YouTubeOverlay = dynamic(() => import('@/components/YouTubeOverlay'), { ssr: false });
 
 export default function Home() {
+  const [openModal, setOpenModal] = useState<'none' | 'map' | 'style' | 'speed' | 'camera'>('none');
+  const [initialVideoPos, setInitialVideoPos] = useState<{ x: number; y: number } | null>(null);
+  const [showElevation, setShowElevation] = useState(true);
+
+  const {
+    state,
+    setMapStyle,
+    set,
+    setActiveRoute,
+    startAnimation,
+    stopAnimation,
+    resetAnimation,
+  } = useEditorState();
+
+  const canAnimate = state.cities.length >= 2;
+
+  function handlePlayPause() {
+    if (state.isAnimating) {
+      stopAnimation();
+    } else if (state.animationProgress >= 1) {
+      resetAnimation();
+      setTimeout(startAnimation, 50);
+    } else {
+      startAnimation();
+    }
+  }
+
+  function handleSeek(progress: number) {
+    set('animationProgress', progress);
+    if ((window as any).__YT_PLAYER) {
+      (window as any).__IS_SCRUBBING = true;
+      (window as any).__YT_PLAYER.seekTo(progress * (state.durationSeconds || 2056), true);
+      setTimeout(() => { (window as any).__IS_SCRUBBING = false; }, 500);
+    }
+  }
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
+    <div className="h-screen w-full relative overflow-hidden bg-black text-white font-sans">
+      
+      {/* ── Map area ── */}
+      <main className="absolute inset-0">
+        <YouTubeOverlay 
+          state={state} 
+          startAnimation={startAnimation} 
+          stopAnimation={stopAnimation} 
+          initialPos={initialVideoPos} 
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
+        
+        <GlobeMap
+          cities={state.cities}
+          vehicle={state.vehicle}
+          mapStyle={state.mapStyle}
+          globeAtmosphere={state.globeAtmosphere}
+          animationProgress={state.animationProgress}
+          isAnimating={state.isAnimating}
+          cameraMode={state.cameraMode}
+          routeColor={state.routeColor}
+          routeWidth={state.routeWidth}
+          showElevation={showElevation}
+          durationSeconds={state.durationSeconds}
+          onSeek={handleSeek}
+          onPoint1Projected={(x: number, y: number) => {
+            if (typeof window === 'undefined') return;
+            const videoWidth = 320;
+            const videoHeight = 204;
+            const padding = 20;
+            
+            // Calculate ideal position
+            let idealX = x - 180;
+            let idealY = y + 30;
+            
+            // Clamp X
+            const maxX = window.innerWidth - videoWidth - padding;
+            idealX = Math.max(padding, Math.min(idealX, maxX));
+            
+            // Clamp Y
+            const maxY = window.innerHeight - videoHeight - padding;
+            idealY = Math.max(padding, Math.min(idealY, maxY));
+            
+            setInitialVideoPos({ x: idealX, y: idealY });
+          }}
+        />
+
+        {/* Animation progress bar overlay */}
+        {(state.isAnimating || state.animationProgress > 0) && (
+          <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/40 z-50">
+            <div
+              className="h-full transition-all duration-100"
+              style={{ width: `${state.animationProgress * 100}%`, background: 'linear-gradient(to right, #FFFFFF, #CCFF00)' }}
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
+          </div>
+        )}
       </main>
+
+
+
+      {/* ── Floating Minimalist UI (Top Left) ── */}
+      <div className="absolute top-6 left-6 z-50 flex flex-col items-start gap-4">
+        
+        {/* Play Button */}
+        <button
+          id="top-left-play-btn"
+          onClick={handlePlayPause}
+          disabled={!canAnimate}
+          className={`w-14 h-14 rounded-full flex items-center justify-center shadow-2xl backdrop-blur-md transition-all border ${
+            canAnimate
+              ? state.isAnimating
+                ? 'bg-[#CCFF00]/20 text-[#CCFF00] border-[#CCFF00]/50 hover:bg-lime-400/30'
+                : 'bg-black/60 text-white border-white/20 hover:bg-black/80 hover:border-white/40'
+              : 'bg-gray-800 text-gray-600 border-gray-700 cursor-not-allowed'
+          }`}
+        >
+          {state.isAnimating ? <Pause size={24} fill="currentColor" /> : <Play size={24} fill="currentColor" className="ml-1" />}
+        </button>
+
+        {/* Floating Modals Container */}
+        <div className="relative">
+          
+          {/* Action Buttons Row */}
+          <div className="flex flex-col gap-2">
+            <div className="relative group">
+              <button
+                className={`w-10 h-10 rounded-full flex items-center justify-center backdrop-blur-md transition-all border bg-black/50 text-white border-white/10 hover:bg-black/70`}
+                title="Switch Route"
+              >
+                <MapPin size={18} />
+              </button>
+              <div className="absolute top-0 left-12 hidden group-hover:flex flex-col gap-1 bg-black/80 backdrop-blur-xl border border-white/10 rounded-xl p-2 w-48 shadow-2xl">
+                {state.routes.map(r => (
+                  <button
+                    key={r.id}
+                    onClick={() => {
+                      setActiveRoute(r.id);
+                    }}
+                    className={`text-left px-3 py-2 text-sm rounded-lg transition-colors ${
+                      state.activeRouteId === r.id 
+                        ? 'bg-[#CCFF00]/20 text-[#CCFF00] font-medium' 
+                        : 'text-white/70 hover:bg-white/10 hover:text-white'
+                    }`}
+                  >
+                    {r.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+
+            <button
+              onClick={() => setOpenModal(openModal === 'map' ? 'none' : 'map')}
+              className={`w-10 h-10 rounded-full flex items-center justify-center backdrop-blur-md transition-all border ${
+                openModal === 'map' 
+                  ? 'bg-[#CCFF00]/20 text-[#CCFF00] border-[#CCFF00]/50' 
+                  : 'bg-black/50 text-white border-white/10 hover:bg-black/70'
+              }`}
+              title="Map Style"
+            >
+              <MapIcon size={18} />
+            </button>
+            
+            
+            <button
+              onClick={() => setOpenModal(openModal === 'speed' ? 'none' : 'speed')}
+              className={`w-10 h-10 rounded-full flex items-center justify-center backdrop-blur-md transition-all border ${
+                openModal === 'speed' 
+                  ? 'bg-[#CCFF00]/20 text-[#CCFF00] border-[#CCFF00]/50' 
+                  : 'bg-black/50 text-white border-white/10 hover:bg-black/70'
+              }`}
+              title="Animation Speed"
+            >
+              <Gauge size={18} />
+            </button>
+            <button
+              onClick={() => setOpenModal(openModal === 'camera' ? 'none' : 'camera')}
+              className={`w-10 h-10 rounded-full flex items-center justify-center backdrop-blur-md transition-all border ${
+                openModal === 'camera' 
+                  ? 'bg-[#CCFF00]/20 text-[#CCFF00] border-[#CCFF00]/50' 
+                  : 'bg-black/50 text-white border-white/10 hover:bg-black/70'
+              }`}
+              title="Camera Behavior"
+            >
+              <Video size={18} />
+            </button>
+
+            {(state.isAnimating || state.animationProgress > 0) && (
+              <button
+                onClick={resetAnimation}
+                className="w-10 h-10 rounded-full flex items-center justify-center bg-black/50 text-gray-400 border border-white/10 hover:bg-black/70 hover:text-white transition-all mt-2"
+                title="Reset animation"
+              >
+                <RotateCcw size={16} />
+              </button>
+            )}
+          </div>
+
+          {/* Floating Panels */}
+          {openModal !== 'none' && (
+            <div 
+              className="absolute left-14 w-72 bg-black/80 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden transition-all duration-200"
+              style={{
+                top: openModal === 'map' ? 48 : openModal === 'speed' ? 96 : openModal === 'camera' ? 144 : 0
+              }}
+            >
+              {openModal === 'map' && (
+                <MapPanel
+                  mapStyle={state.mapStyle}
+                  onMapStyle={setMapStyle}
+                />
+              )}
+              
+              {openModal === 'speed' && (
+                <AnimationsPanel
+                  animSpeed={state.animSpeed}
+                  cameraMode={state.cameraMode}
+                  onChange={set}
+                />
+              )}
+              {openModal === 'camera' && (
+                <CameraPanel
+                  cameraMode={state.cameraMode}
+                  onChange={set}
+                />
+              )}
+            </div>
+          )}
+        </div>
+
+      </div>
     </div>
   );
 }

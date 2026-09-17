@@ -1,0 +1,201 @@
+import React, { useEffect, useRef, useState } from 'react';
+import { useEditorState } from '../hooks/useEditorState';
+import { Rnd } from 'react-rnd';
+import { GripHorizontal } from 'lucide-react';
+
+export default function YouTubeOverlay({ state, startAnimation, stopAnimation, initialPos }: any) {
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const playerRef = useRef<any>(null);
+  const [isReady, setIsReady] = useState(false);
+  const isInternalChange = useRef(false);
+  const hasInitialized = useRef(false);
+  const currentVideoIdRef = useRef<string>(state.videoId || '5EgtgRoC8NI');
+
+  const [pos, setPos] = useState({ 
+    x: typeof window !== 'undefined' ? window.innerWidth - 360 : 400, 
+    y: 40 
+  });
+  const [size, setSize] = useState({ width: 320, height: 204 });
+  const hasSetInitial = useRef(false);
+  const [isPositioned, setIsPositioned] = useState(false);
+  const [videoTitle, setVideoTitle] = useState("YOUTUBE VIDEO");
+
+  useEffect(() => {
+    if (initialPos && !hasSetInitial.current) {
+      setPos(initialPos);
+      hasSetInitial.current = true;
+      // Small delay to ensure the position is applied before fading in
+      setTimeout(() => setIsPositioned(true), 100);
+    }
+  }, [initialPos]);
+
+  useEffect(() => {
+    const initPlayer = () => {
+      if (playerRef.current) return;
+      playerRef.current = new (window as any).YT.Player('youtube-player', {
+        videoId: currentVideoIdRef.current,
+        playerVars: {
+          autoplay: 0,
+          controls: 0,
+          modestbranding: 1,
+          disablekb: 1,
+          rel: 0,
+          showinfo: 0,
+          origin: 'http://localhost:3005'
+        },
+        events: {
+          'onReady': () => { 
+            setIsReady(true); 
+            (window as any).__YT_PLAYER = playerRef.current; 
+            try {
+              const data = playerRef.current.getVideoData();
+              if (data && data.title) {
+                setVideoTitle(data.title);
+              }
+            } catch(e) {}
+          },
+          'onStateChange': (event: any) => {
+            if (isInternalChange.current || (window as any).__IS_SCRUBBING) return;
+            const isPlaying = event.data === 1;
+            const isPaused = event.data === 2;
+            const isBuffering = event.data === 3;
+            const currentState = (window as any).__EDITOR_STATE;
+            
+            if (isPlaying && !currentState.isAnimating) {
+              startAnimation();
+            } else if ((isPaused || isBuffering) && currentState.isAnimating) {
+              stopAnimation();
+            }
+          }
+        }
+      });
+    };
+
+    if (!(window as any).YT) {
+      const tag = document.createElement('script');
+      tag.src = "https://www.youtube.com/iframe_api";
+      const firstScriptTag = document.getElementsByTagName('script')[0];
+      firstScriptTag.parentNode?.insertBefore(tag, firstScriptTag);
+      (window as any).onYouTubeIframeAPIReady = initPlayer;
+    } else if ((window as any).YT && (window as any).YT.Player) {
+      initPlayer();
+    }
+
+    return () => {
+      if (playerRef.current) {
+        playerRef.current.destroy();
+        playerRef.current = null;
+      }
+    };
+  }, [startAnimation, stopAnimation]);
+
+  // ── Switch video when route changes ──
+  useEffect(() => {
+    const newVideoId = state.videoId;
+    if (!newVideoId || newVideoId === currentVideoIdRef.current) return;
+    currentVideoIdRef.current = newVideoId;
+    
+    if (playerRef.current && playerRef.current.loadVideoById) {
+      isInternalChange.current = true;
+      playerRef.current.loadVideoById(newVideoId, 0);
+      // Wait for the new video to be ready, then update the title
+      setTimeout(() => {
+        try {
+          const data = playerRef.current.getVideoData();
+          if (data && data.title) {
+            setVideoTitle(data.title);
+          }
+        } catch(e) {}
+        // Pause it so it doesn't autoplay
+        try { playerRef.current.pauseVideo(); } catch(e) {}
+        isInternalChange.current = false;
+      }, 1500);
+    }
+  }, [state.videoId]);
+
+  useEffect(() => {
+    (window as any).__EDITOR_STATE = state;
+    
+    const btn = document.getElementById('top-left-play-btn');
+    if (btn) {
+      const handler = () => {
+        if (!state.isAnimating && playerRef.current) {
+          playerRef.current.playVideo();
+        } else if (state.isAnimating && playerRef.current) {
+          playerRef.current.pauseVideo();
+        }
+      };
+      btn.addEventListener('click', handler);
+      return () => btn.removeEventListener('click', handler);
+    }
+  }, [state]);
+
+  useEffect(() => {
+    if (!isReady || !playerRef.current) return;
+    isInternalChange.current = true;
+    if (state.isAnimating) {
+      playerRef.current.playVideo();
+    } else {
+      const playerState = playerRef.current.getPlayerState ? playerRef.current.getPlayerState() : -1;
+      if (playerState !== -1 && playerState !== 5) {
+        playerRef.current.pauseVideo();
+      }
+    }
+    setTimeout(() => { isInternalChange.current = false; }, 200);
+  }, [state.isAnimating, isReady]);
+
+  const lastProgress = useRef(state.animationProgress);
+  useEffect(() => {
+    if (!isReady || !playerRef.current) return;
+    if (state.animationProgress === 0 && lastProgress.current === 0) return;
+    
+    // Check if progress jumped significantly (e.g., a manual seek)
+    const isManualSeek = Math.abs(state.animationProgress - lastProgress.current) > 0.005;
+    
+    if (isManualSeek || !state.isAnimating) {
+      if (state.animationProgress !== lastProgress.current) {
+        const targetTime = state.animationProgress * (state.durationSeconds || 2056);
+        playerRef.current.seekTo(targetTime, true);
+        lastProgress.current = state.animationProgress;
+      }
+    } else {
+      // Natural progression while playing, just update lastProgress so we don't seek next time
+      lastProgress.current = state.animationProgress;
+    }
+  }, [state.animationProgress, isReady, state.isAnimating]);
+
+  useEffect(() => {
+    if (playerRef.current && playerRef.current.setPlaybackRate) {
+      playerRef.current.setPlaybackRate(state.animSpeed);
+    }
+  }, [state.animSpeed]);
+
+  return (
+    <Rnd
+      position={{ x: pos.x, y: pos.y }}
+      size={{ width: size.width, height: size.height }}
+      onDragStop={(e, d) => setPos({ x: d.x, y: d.y })}
+      onResizeStop={(e, direction, ref, delta, position) => {
+        setSize({ width: parseInt(ref.style.width), height: parseInt(ref.style.height) });
+        setPos(position);
+      }}
+      minWidth={200}
+      minHeight={136}
+      lockAspectRatio={320/204}
+      bounds="parent"
+      dragHandleClassName="drag-handle"
+      className={`z-50 rounded-xl overflow-hidden shadow-[0_25px_50px_-12px_rgba(0,0,0,0.8),0_0_30px_rgba(0,0,0,0.5)] border border-white/20 bg-black/60 backdrop-blur-md flex flex-col transition-opacity duration-1000 ${isPositioned ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+    >
+      <div className="drag-handle w-full flex items-center justify-between cursor-move text-white/50 hover:text-white/90 transition-colors px-3" style={{ height: '24px', minHeight: '24px', flexShrink: 0 }}>
+        <span className="text-white text-[11px] font-bold tracking-wide uppercase opacity-80 truncate mr-2 pointer-events-none select-none">
+          {videoTitle}
+        </span>
+        <GripHorizontal size={20} className="shrink-0" />
+      </div>
+      {/* Container for the iframe to maintain exact 16:9 inner ratio */}
+      <div className="w-full relative bg-black" style={{ height: 'calc(100% - 24px)' }}>
+        <div id="youtube-player" className="absolute inset-0 w-full h-full"></div>
+      </div>
+    </Rnd>
+  );
+}
