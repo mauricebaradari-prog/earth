@@ -3,7 +3,7 @@ import { useEditorState } from '../hooks/useEditorState';
 import { Rnd } from 'react-rnd';
 import { GripHorizontal } from 'lucide-react';
 
-export default function YouTubeOverlay({ state, startAnimation, stopAnimation, initialPos }: any) {
+export default function YouTubeOverlay({ state, startAnimation, stopAnimation, initialPos, setActiveWindow }: any) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const playerRef = useRef<any>(null);
   const [isReady, setIsReady] = useState(false);
@@ -185,7 +185,10 @@ export default function YouTubeOverlay({ state, startAnimation, stopAnimation, i
       lockAspectRatio={320/204}
       bounds="parent"
       dragHandleClassName="drag-handle"
-      className={`z-50 rounded-xl overflow-hidden shadow-[0_25px_50px_-12px_rgba(0,0,0,0.8),0_0_30px_rgba(0,0,0,0.5)] border border-white/20 bg-black/60 backdrop-blur-md flex flex-col transition-opacity duration-1000 ${isPositioned ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+      className={`rounded-xl overflow-hidden shadow-[0_25px_50px_-12px_rgba(0,0,0,0.8),0_0_30px_rgba(0,0,0,0.5)] border border-white/20 bg-black/60 backdrop-blur-md flex flex-col transition-opacity duration-1000 ${isPositioned ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+      style={{ zIndex: state.activeWindow === 'video' ? 60 : 50 }}
+      onDragStart={() => setActiveWindow && setActiveWindow('video')}
+      onMouseDown={() => setActiveWindow && setActiveWindow('video')}
     >
       <div className="drag-handle w-full flex items-center justify-between cursor-move text-white/50 hover:text-white/90 transition-colors px-3" style={{ height: '24px', minHeight: '24px', flexShrink: 0 }}>
         <span className="text-white text-[11px] font-bold tracking-wide uppercase opacity-80 truncate mr-2 pointer-events-none select-none">

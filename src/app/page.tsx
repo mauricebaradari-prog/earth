@@ -78,6 +78,8 @@ export default function Home() {
           showElevation={showElevation}
           durationSeconds={state.durationSeconds}
           onSeek={handleSeek}
+          activeWindow={state.activeWindow}
+          setActiveWindow={setActiveWindow}
           onPoint1Projected={(x: number, y: number) => {
             if (typeof window === 'undefined') return;
             const videoWidth = 320;
