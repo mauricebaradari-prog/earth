@@ -40,6 +40,8 @@ interface GlobeMapProps {
   onSeek?: (progress: number) => void;
   activeWindow?: 'video' | 'elevation' | null;
   setActiveWindow?: (w: 'video' | 'elevation') => void;
+  onPlayRoute?: (routeId: string) => void;
+  onStopRoute?: () => void;
 }
 
 export default function GlobeMap({
@@ -58,7 +60,9 @@ export default function GlobeMap({
   showElevation = true,
   onSeek,
   activeWindow,
-  setActiveWindow
+  setActiveWindow,
+  onPlayRoute,
+  onStopRoute
 }: GlobeMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MaplibreMap | null>(null);
@@ -421,7 +425,13 @@ export default function GlobeMap({
         const endCity = route.cities[route.cities.length - 1];
         [startCity, endCity].forEach((city, idx) => {
           const el = document.createElement('div');
-          el.innerHTML = getCityMarkerHTML(idx === 0 ? 'A' : 'B', city.name, idx === 0, idx === 1);
+          el.innerHTML = getCityMarkerHTML(idx === 0 ? 'A' : 'B', city.name, idx === 0, idx === 1, route.id, false);
+          if (idx === 0) {
+            el.style.cursor = 'pointer';
+            el.addEventListener('click', () => {
+              onPlayRoute && onPlayRoute(route.id);
+            });
+          }
           const marker = new Marker({ element: el, anchor: 'bottom' })
             .setLngLat([city.lng, city.lat])
             .addTo(map);
@@ -441,6 +451,14 @@ export default function GlobeMap({
     }
   }, [routes, cities, mapStyle]);
 
+  // Rebuild markers when animation state changes (play/pause icon toggle)
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !routeInitializedRef.current) return;
+    // Find the active route ID
+    const activeRoute = routes?.find(r => r.cities.length === cities.length && r.cities.every((c, i) => c.id === cities[i].id));
+    rebuildMarkers(map, cities, activeRoute?.id);
+  }, [isAnimating]);
 
   // ── 3. Cities update ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -701,7 +719,7 @@ export default function GlobeMap({
     }
   }
 
-  function rebuildMarkers(map: MaplibreMap, cs: City[]) {
+  function rebuildMarkers(map: MaplibreMap, cs: City[], activeRouteId?: string) {
     markersRef.current.forEach((m) => m.remove());
     markersRef.current = [];
     import('maplibre-gl').then(({ Marker }) => {
@@ -709,7 +727,17 @@ export default function GlobeMap({
         if (i !== 0 && i !== cs.length - 1) return;
         const label = i === 0 ? 'A' : 'B';
         const el = document.createElement('div');
-        el.innerHTML = getCityMarkerHTML(label, city.name, i === 0, i === cs.length - 1);
+        el.innerHTML = getCityMarkerHTML(label, city.name, i === 0, i === cs.length - 1, activeRouteId, isAnimating);
+        if (i === 0) {
+          el.style.cursor = 'pointer';
+          el.addEventListener('click', () => {
+            if (isAnimating) {
+              onStopRoute && onStopRoute();
+            } else {
+              onPlayRoute && onPlayRoute(activeRouteId || '');
+            }
+          });
+        }
         const marker = new Marker({ element: el, anchor: 'bottom' })
           .setLngLat([city.lng, city.lat])
           .addTo(map);
@@ -913,17 +941,28 @@ function distance(p1: [number, number], p2: [number, number]) {
   return R * c;
 }
 
-function getCityMarkerHTML(label: string, name: string, isFirst: boolean, isLast: boolean): string {
+function getCityMarkerHTML(label: string, name: string, isFirst: boolean, isLast: boolean, routeId?: string, isPlaying?: boolean): string {
   let color = '#4ade80';
   let innerHtml = label;
   
   if (isFirst) {
-    color = '#ffffff';
-    innerHtml = `
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="#111">
-        <path d="M19.44,9.03L15.41,5H11v2h3.59l2,2H5C2.24,9,0,11.24,0,14s2.24,5,5,5c2.46,0,4.5-1.75,4.9-4h4.2 c0.4,2.25,2.44,4,4.9,4c2.76,0,5-2.24,5-5C24,11.69,21.99,9.67,19.44,9.03z M5,17c-1.66,0-3-1.34-3-3s1.34-3,3-3s3,1.34,3,3 S6.66,17,5,17z M19,17c-1.66,0-3-1.34-3-3s1.34-3,3-3s3,1.34,3,3S20.66,17,19,17z M10.82,6.5L9.56,4.8C9.07,5.52,8.18,6,7.2,6H4V8h3.2 C7.9,8,8.5,7.5,8.81,6.8L9.26,6H11V8h2L10.82,6.5z"/>
-      </svg>
-    `;
+    color = '#CCFF00';
+    if (isPlaying) {
+      // Stop icon (two vertical bars)
+      innerHtml = `
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="#111">
+          <rect x="6" y="4" width="4" height="16" rx="1" />
+          <rect x="14" y="4" width="4" height="16" rx="1" />
+        </svg>
+      `;
+    } else {
+      // Play icon (triangle)
+      innerHtml = `
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="#111" style="transform: translateX(1px)">
+          <path d="M8 5v14l11-7z"/>
+        </svg>
+      `;
+    }
   } else if (isLast) {
     color = '#ffffff';
     innerHtml = `
@@ -941,9 +980,12 @@ function getCityMarkerHTML(label: string, name: string, isFirst: boolean, isLast
     color = '#CCFF00';
   }
   
+  const cursorStyle = isFirst ? 'cursor:pointer;' : '';
+  const dataAttr = isFirst && routeId ? `data-route-id="${routeId}" data-play-btn="true"` : '';
+  
   return `
     <div style="display:flex; flex-direction:column; align-items:center; transform:translateY(-4px);">
-      <div style="background:${color}; color:#111; font-weight:bold; font-family:sans-serif; width:32px; height:32px; display:flex; align-items:center; justify-content:center; border-radius:50%; border:3px solid #1a1a1a; box-shadow:0 4px 6px rgba(0,0,0,0.3); z-index:10;">
+      <div ${dataAttr} style="background:${color}; color:#111; font-weight:bold; font-family:sans-serif; width:32px; height:32px; display:flex; align-items:center; justify-content:center; border-radius:50%; border:3px solid #1a1a1a; box-shadow:0 4px 6px rgba(0,0,0,0.3); z-index:10; ${cursorStyle} transition: transform 0.15s ease;" onmouseover="this.style.transform='scale(1.15)'" onmouseout="this.style.transform='scale(1)'">
         ${innerHtml}
       </div>
       <div style="margin-top:4px; background:#1a1a1a; color:#f3f4f6; padding:2px 8px; border-radius:4px; font-size:12px; font-family:sans-serif; font-weight:600; border:1px solid #333; box-shadow:0 2px 4px rgba(0,0,0,0.3); white-space:nowrap;">

@@ -32,6 +32,25 @@ export default function Home() {
 
   const canAnimate = state.cities.length >= 2;
 
+  function handlePlayRoute(routeId: string) {
+    if (routeId !== state.activeRouteId) {
+      setActiveRoute(routeId);
+      // Wait for route to load, then start animation
+      setTimeout(() => startAnimation(), 300);
+    } else {
+      if (state.animationProgress >= 1) {
+        resetAnimation();
+        setTimeout(startAnimation, 50);
+      } else {
+        startAnimation();
+      }
+    }
+  }
+
+  function handleStopRoute() {
+    stopAnimation();
+  }
+
   function handlePlayPause() {
     if (state.isAnimating) {
       stopAnimation();
@@ -81,6 +100,8 @@ export default function Home() {
           onSeek={handleSeek}
           activeWindow={state.activeWindow}
           setActiveWindow={setActiveWindow}
+          onPlayRoute={handlePlayRoute}
+          onStopRoute={handleStopRoute}
           onPoint1Projected={(x: number, y: number) => {
             if (typeof window === 'undefined') return;
             const videoWidth = 320;
