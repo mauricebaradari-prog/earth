@@ -65,6 +65,7 @@ export default function GlobeMap({
   const prevStyleRef = useRef<string | null>(null);
   const routeInitializedRef = useRef(false);
   const markersRef = useRef<maplibregl.Marker[]>([]);
+  const inactiveMarkersRef = useRef<maplibregl.Marker[]>([]);
   const initialCameraRef = useRef<{center: {lng: number, lat: number}, zoom: number, pitch: number, bearing: number, timestamp: number} | null>(null);
   
   const renderPassRef = useRef<number>(0);
@@ -73,7 +74,8 @@ export default function GlobeMap({
   const [elevationProfile, setElevationProfile] = React.useState<number[] | null>(null);
   const [fullSvgPath, setFullSvgPath] = React.useState<string>('');
   const [svgPath, setSvgPath] = React.useState<string>('');
-  
+  const [inactiveSvgPath, setInactiveSvgPath] = React.useState<string>('');
+  const inactiveRouteCoordsRef = useRef<[number, number][][]>([]);
   const animProgressRef = useRef(animationProgress);
   const durationRef = useRef(durationSeconds);
   
@@ -170,6 +172,19 @@ export default function GlobeMap({
              screenPts.push(`${p.x},${p.y}`);
           }
           if (screenPts.length > 0) setFullSvgPath(`M ${screenPts.join(' L ')}`);
+
+          // Project inactive routes to SVG
+          const inactiveSegments: string[] = [];
+          for (const seg of inactiveRouteCoordsRef.current) {
+            const segPts: string[] = [];
+            for (const c of seg) {
+              if (!mapRef.current) continue;
+              const p = mapRef.current.project([c[0], c[1]]);
+              segPts.push(`${p.x},${p.y}`);
+            }
+            if (segPts.length > 0) inactiveSegments.push(`M ${segPts.join(' L ')}`);
+          }
+          setInactiveSvgPath(inactiveSegments.join(' '));
 
           const pts: string[] = [];
           routeCoordsRef.current.forEach((feat) => {
@@ -286,9 +301,9 @@ export default function GlobeMap({
         },
         paint: {
           'line-color': '#ffffff',
-          'line-width': width,
-          'line-opacity': 0.5,
-          'line-dasharray': [2, 2],
+          'line-width': 3,
+          'line-opacity': 0.6,
+          'line-dasharray': [3, 3],
         },
       });
     }
@@ -358,9 +373,11 @@ export default function GlobeMap({
   async function updateInactiveRoutes(map: MaplibreMap) {
     if (!routes) return;
     const allFeatures: GeoJSON.Feature[] = [];
+    const allCoordSegments: [number, number][][] = [];
     
     for (const route of routes) {
-      if (route.cities.length === cities.length && route.cities.every((c, i) => c.id === cities[i].id)) continue;
+      const isActive = route.cities.length === cities.length && route.cities.every((c, i) => c.id === cities[i].id);
+      if (isActive) continue;
       
       for (let i = 0; i < route.cities.length - 1; i++) {
         const cacheKey = `${route.cities[i].id}-${route.cities[i+1].id}`;
@@ -376,6 +393,7 @@ export default function GlobeMap({
           } catch(e) {}
         }
         const finalCoords = coords || greatCircleArc(route.cities[i], route.cities[i + 1], 120);
+        allCoordSegments.push(finalCoords);
         allFeatures.push({
           type: 'Feature',
           properties: {},
@@ -383,11 +401,37 @@ export default function GlobeMap({
         });
       }
     }
+    // Store for SVG rendering
+    inactiveRouteCoordsRef.current = allCoordSegments;
+    // Also update MapLibre source (as backup)
     if (map.getSource('inactive-routes')) {
       (map.getSource('inactive-routes') as GeoJSONSource).setData({
         type: 'FeatureCollection',
         features: allFeatures,
       });
+    }
+    // Add start/end markers for inactive routes
+    inactiveMarkersRef.current.forEach(m => m.remove());
+    inactiveMarkersRef.current = [];
+    import('maplibre-gl').then(({ Marker }) => {
+      for (const route of routes) {
+        const isActive = route.cities.length === cities.length && route.cities.every((c, i) => c.id === cities[i].id);
+        if (isActive) continue;
+        const startCity = route.cities[0];
+        const endCity = route.cities[route.cities.length - 1];
+        [startCity, endCity].forEach((city, idx) => {
+          const el = document.createElement('div');
+          el.innerHTML = getCityMarkerHTML(idx === 0 ? 'A' : 'B', city.name, idx === 0, idx === 1);
+          const marker = new Marker({ element: el, anchor: 'bottom' })
+            .setLngLat([city.lng, city.lat])
+            .addTo(map);
+          inactiveMarkersRef.current.push(marker);
+        });
+      }
+    });
+    // Trigger SVG update
+    if ((window as any)._updateSvgOverlay) {
+      (window as any)._updateSvgOverlay();
     }
   }
 
@@ -694,6 +738,7 @@ export default function GlobeMap({
           </linearGradient>
         </defs>
         <path d={fullSvgPath} fill="none" stroke={animationProgress === 0 ? routeColor : 'rgba(255, 255, 255, 0.3)'} strokeWidth={routeWidth * 1.5 + 2} strokeLinecap="round" strokeLinejoin="round" />
+        {inactiveSvgPath && <path d={inactiveSvgPath} fill="none" stroke={routeColor} strokeWidth={routeWidth * 1.5 + 2} strokeLinecap="round" strokeLinejoin="round" />}
         <path d={svgPath} fill="none" stroke="url(#routeGrad)" strokeWidth={routeWidth * 1.5 + 2} strokeLinecap="round" strokeLinejoin="round" />
       </svg>
       {vehicleDot && (
