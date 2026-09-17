@@ -42,6 +42,7 @@ export interface EditorState {
   routeColor: string;
   routeWidth: number;
   videoId: string;
+  activeWindow: 'video' | 'elevation' | null;
 }
 
 export const ROUTES: RouteConfig[] = [
@@ -99,6 +100,7 @@ export function useEditorState() {
       routeColor: active.routeColor,
       routeWidth: 2,
       videoId: active.videoId,
+      activeWindow: 'video',
     };
   });
 
@@ -111,6 +113,10 @@ export function useEditorState() {
 
   const set = useCallback(<K extends keyof EditorState>(key: K, value: EditorState[K]) => {
     setState((prev) => ({ ...prev, [key]: value }));
+  }, []);
+
+  const setActiveWindow = useCallback((w: 'video' | 'elevation') => {
+    setState((prev) => ({ ...prev, activeWindow: w }));
   }, []);
 
   const setActiveRoute = useCallback((routeId: string) => {
@@ -180,6 +186,7 @@ export function useEditorState() {
     setMapStyle,
     set,
     setActiveRoute,
+    setActiveWindow,
     startAnimation,
     stopAnimation,
     resetAnimation,

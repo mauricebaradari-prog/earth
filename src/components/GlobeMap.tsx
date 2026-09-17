@@ -38,6 +38,8 @@ interface GlobeMapProps {
   onPoint1Projected?: (x: number, y: number) => void;
   showElevation?: boolean;
   onSeek?: (progress: number) => void;
+  activeWindow?: 'video' | 'elevation' | null;
+  setActiveWindow?: (w: 'video' | 'elevation') => void;
 }
 
 export default function GlobeMap({
@@ -54,7 +56,9 @@ export default function GlobeMap({
   durationSeconds,
   onPoint1Projected,
   showElevation = true,
-  onSeek
+  onSeek,
+  activeWindow,
+  setActiveWindow
 }: GlobeMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MaplibreMap | null>(null);
@@ -740,6 +744,9 @@ export default function GlobeMap({
           bounds="parent"
           enableResizing={false}
           className="z-50"
+          style={{ zIndex: activeWindow === 'elevation' ? 60 : 50 }}
+          onDragStart={() => setActiveWindow && setActiveWindow('elevation')}
+          onMouseDown={() => setActiveWindow && setActiveWindow('elevation')}
         >
         <div style={{ width: '100%', height: '100%', background: 'linear-gradient(180deg, rgba(17,17,17,0.95) 0%, rgba(17,17,17,0.85) 100%)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.08)', padding: '16px', backdropFilter: 'blur(12px)', boxShadow: '0 8px 32px rgba(0,0,0,0.4)', pointerEvents: 'auto', cursor: 'grab' }} className="active:cursor-grabbing">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }} className="pointer-events-none">

@@ -24,6 +24,7 @@ export default function Home() {
     setMapStyle,
     set,
     setActiveRoute,
+    setActiveWindow,
     startAnimation,
     stopAnimation,
     resetAnimation,
@@ -61,6 +62,7 @@ export default function Home() {
           startAnimation={startAnimation} 
           stopAnimation={stopAnimation} 
           initialPos={initialVideoPos} 
+          setActiveWindow={setActiveWindow}
         />
         
         <GlobeMap
@@ -205,9 +207,9 @@ export default function Home() {
                         setActiveRoute(r.id);
                         setOpenModal('none');
                       }}
-                      className={`text-left px-4 py-3 text-sm rounded-xl transition-colors ${
+                      className={`text-left px-4 py-3 text-sm rounded-lg transition-colors ${
                         state.activeRouteId === r.id 
-                          ? 'bg-[#CCFF00]/20 text-[#CCFF00] font-medium border border-[#CCFF00]/50' 
+                          ? 'bg-[#CCFF00] text-black font-medium border border-transparent' 
                           : 'bg-white/5 text-white/70 border border-transparent hover:bg-white/10 hover:text-white'
                       }`}
                     >
