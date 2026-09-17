@@ -11,7 +11,6 @@ import { useEditorState } from '@/hooks/useEditorState';
 import GlobeMap from '@/components/GlobeMap';
 import AnimationsPanel from '@/components/panels/AnimationsPanel';
 import CameraPanel from '@/components/panels/CameraPanel';
-import MapPanel from '@/components/panels/MapPanel';
 
 const YouTubeOverlay = dynamic(() => import('@/components/YouTubeOverlay'), { ssr: false });
 
@@ -163,17 +162,7 @@ export default function Home() {
             </div>
 
 
-            <button
-              onClick={() => setOpenModal(openModal === 'map' ? 'none' : 'map')}
-              className={`w-10 h-10 rounded-full flex items-center justify-center backdrop-blur-md transition-all border ${
-                openModal === 'map' 
-                  ? 'bg-[#CCFF00]/20 text-[#CCFF00] border-[#CCFF00]/50' 
-                  : 'bg-black/50 text-white border-white/10 hover:bg-black/70'
-              }`}
-              title="Map Style"
-            >
-              <MapIcon size={18} />
-            </button>
+            
             
             
             <button
@@ -215,15 +204,10 @@ export default function Home() {
             <div 
               className="absolute left-14 w-72 bg-black/80 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden transition-all duration-200"
               style={{
-                top: openModal === 'map' ? 48 : openModal === 'speed' ? 96 : openModal === 'camera' ? 144 : 0
+                top: openModal === 'speed' ? 48 : openModal === 'camera' ? 96 : 0
               }}
             >
-              {openModal === 'map' && (
-                <MapPanel
-                  mapStyle={state.mapStyle}
-                  onMapStyle={setMapStyle}
-                />
-              )}
+              
               
               {openModal === 'speed' && (
                 <AnimationsPanel
