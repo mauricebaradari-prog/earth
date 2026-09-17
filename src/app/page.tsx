@@ -67,6 +67,7 @@ export default function Home() {
         
         <GlobeMap
           cities={state.cities}
+          routes={state.routes}
           vehicle={state.vehicle}
           mapStyle={state.mapStyle}
           globeAtmosphere={state.globeAtmosphere}
