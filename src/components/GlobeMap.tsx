@@ -400,6 +400,7 @@ export default function GlobeMap({
     const map = mapRef.current;
     if (!map || !routeInitializedRef.current) return;
     renderPassRef.current += 1;
+    legDistancesRef.current = [];
     updateRouteData(map, renderPassRef.current);
     rebuildMarkers(map, cities);
 
@@ -480,6 +481,11 @@ export default function GlobeMap({
       });
     }
     
+    updateRouteProgress(map, cities, animProgressRef.current, totalPathDist, lDists);
+    if ((window as any)._updateSvgOverlay) {
+      (window as any)._updateSvgOverlay();
+    }
+    
 
     
     // Fetch elevation profile
@@ -512,7 +518,7 @@ export default function GlobeMap({
     legDists: number[]
   ) {
     
-    if (!map.getSource('route')) return;
+    if (!map.getSource('route') || legDists.length !== cs.length - 1) return;
 
     let remaining = progress;
     let vehiclePoint = (progress === 0 && midLngLatRef.current) ? midLngLatRef.current : (cs[0] ? [cs[0].lng, cs[0].lat] : [0,0]);

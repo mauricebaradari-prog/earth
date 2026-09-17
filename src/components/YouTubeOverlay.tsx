@@ -85,6 +85,7 @@ export default function YouTubeOverlay({ state, startAnimation, stopAnimation, i
       if (playerRef.current) {
         playerRef.current.destroy();
         playerRef.current = null;
+        setIsReady(false);
       }
     };
   }, [startAnimation, stopAnimation]);
@@ -119,9 +120,9 @@ export default function YouTubeOverlay({ state, startAnimation, stopAnimation, i
     const btn = document.getElementById('top-left-play-btn');
     if (btn) {
       const handler = () => {
-        if (!state.isAnimating && playerRef.current) {
+        if (!state.isAnimating && playerRef.current && typeof playerRef.current.playVideo === 'function') {
           playerRef.current.playVideo();
-        } else if (state.isAnimating && playerRef.current) {
+        } else if (state.isAnimating && playerRef.current && typeof playerRef.current.pauseVideo === 'function') {
           playerRef.current.pauseVideo();
         }
       };
@@ -134,11 +135,11 @@ export default function YouTubeOverlay({ state, startAnimation, stopAnimation, i
     if (!isReady || !playerRef.current) return;
     isInternalChange.current = true;
     if (state.isAnimating) {
-      playerRef.current.playVideo();
+      if (typeof playerRef.current.playVideo === 'function') playerRef.current.playVideo();
     } else {
-      const playerState = playerRef.current.getPlayerState ? playerRef.current.getPlayerState() : -1;
+      const playerState = typeof playerRef.current.getPlayerState === 'function' ? playerRef.current.getPlayerState() : -1;
       if (playerState !== -1 && playerState !== 5) {
-        playerRef.current.pauseVideo();
+        if (typeof playerRef.current.pauseVideo === 'function') playerRef.current.pauseVideo();
       }
     }
     setTimeout(() => { isInternalChange.current = false; }, 200);

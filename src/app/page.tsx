@@ -15,7 +15,7 @@ import CameraPanel from '@/components/panels/CameraPanel';
 const YouTubeOverlay = dynamic(() => import('@/components/YouTubeOverlay'), { ssr: false });
 
 export default function Home() {
-  const [openModal, setOpenModal] = useState<'none' | 'map' | 'style' | 'speed' | 'camera'>('none');
+  const [openModal, setOpenModal] = useState<'none' | 'route' | 'speed' | 'camera'>('none');
   const [initialVideoPos, setInitialVideoPos] = useState<{ x: number; y: number } | null>(null);
   const [showElevation, setShowElevation] = useState(true);
 
@@ -135,31 +135,17 @@ export default function Home() {
           
           {/* Action Buttons Row */}
           <div className="flex flex-col gap-2">
-            <div className="relative group">
-              <button
-                className={`w-10 h-10 rounded-full flex items-center justify-center backdrop-blur-md transition-all border bg-black/50 text-white border-white/10 hover:bg-black/70`}
-                title="Switch Route"
-              >
-                <MapPin size={18} />
-              </button>
-              <div className="absolute top-0 left-12 hidden group-hover:flex flex-col gap-1 bg-black/80 backdrop-blur-xl border border-white/10 rounded-xl p-2 w-48 shadow-2xl">
-                {state.routes.map(r => (
-                  <button
-                    key={r.id}
-                    onClick={() => {
-                      setActiveRoute(r.id);
-                    }}
-                    className={`text-left px-3 py-2 text-sm rounded-lg transition-colors ${
-                      state.activeRouteId === r.id 
-                        ? 'bg-[#CCFF00]/20 text-[#CCFF00] font-medium' 
-                        : 'text-white/70 hover:bg-white/10 hover:text-white'
-                    }`}
-                  >
-                    {r.name}
-                  </button>
-                ))}
-              </div>
-            </div>
+            <button
+              onClick={() => setOpenModal(openModal === 'route' ? 'none' : 'route')}
+              className={`w-10 h-10 rounded-full flex items-center justify-center backdrop-blur-md transition-all border ${
+                openModal === 'route' 
+                  ? 'bg-[#CCFF00]/20 text-[#CCFF00] border-[#CCFF00]/50' 
+                  : 'bg-black/50 text-white border-white/10 hover:bg-black/70'
+              }`}
+              title="Switch Route"
+            >
+              <MapPin size={18} />
+            </button>
 
 
             
@@ -209,6 +195,27 @@ export default function Home() {
             >
               
               
+              {openModal === 'route' && (
+                <div className="p-4 flex flex-col gap-2">
+                  <h3 className="text-white/50 text-[10px] font-bold tracking-widest uppercase mb-2">Switch Route</h3>
+                  {state.routes.map(r => (
+                    <button
+                      key={r.id}
+                      onClick={() => {
+                        setActiveRoute(r.id);
+                        setOpenModal('none');
+                      }}
+                      className={`text-left px-4 py-3 text-sm rounded-xl transition-colors ${
+                        state.activeRouteId === r.id 
+                          ? 'bg-[#CCFF00]/20 text-[#CCFF00] font-medium border border-[#CCFF00]/50' 
+                          : 'bg-white/5 text-white/70 border border-transparent hover:bg-white/10 hover:text-white'
+                      }`}
+                    >
+                      {r.name}
+                    </button>
+                  ))}
+                </div>
+              )}
               {openModal === 'speed' && (
                 <AnimationsPanel
                   animSpeed={state.animSpeed}
