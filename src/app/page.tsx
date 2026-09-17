@@ -199,7 +199,7 @@ export default function Home() {
               
               {openModal === 'route' && (
                 <div className="p-4 flex flex-col gap-2">
-                  <h3 className="text-white/50 text-[10px] font-bold tracking-widest uppercase mb-2">Switch Route</h3>
+                  <h3 className="text-[10px] font-bold text-white uppercase tracking-widest mb-3">Switch Route</h3>
                   {state.routes.map(r => (
                     <button
                       key={r.id}
@@ -207,7 +207,7 @@ export default function Home() {
                         setActiveRoute(r.id);
                         setOpenModal('none');
                       }}
-                      className={`text-left px-4 py-3 text-sm rounded-lg transition-colors ${
+                      className={`text-left px-3 py-2 text-sm rounded-lg transition-colors ${
                         state.activeRouteId === r.id 
                           ? 'bg-[#CCFF00] text-black font-medium border border-transparent' 
                           : 'bg-white/5 text-white/70 border border-transparent hover:bg-white/10 hover:text-white'
