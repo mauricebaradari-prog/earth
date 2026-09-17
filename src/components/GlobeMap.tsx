@@ -237,6 +237,7 @@ export default function GlobeMap({
         routeInitializedRef.current = true;
         updateRouteData(map, 0);
         rebuildMarkers(map, cities);
+        updateInactiveRoutes(map);
         if (cities.length >= 2) {
           const lats = cities.map((c) => c.lat);
           const lngs = cities.map((c) => c.lng);
@@ -353,51 +354,49 @@ export default function GlobeMap({
   }, [mapStyle, globeAtmosphere]);
 
   // ── Fetch Inactive Routes ──────────────────────────────────────────────────
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !routes || !routeInitializedRef.current) return;
+
+  async function updateInactiveRoutes(map: MaplibreMap) {
+    if (!routes) return;
+    const allFeatures: GeoJSON.Feature[] = [];
     
-    (async () => {
-      const allFeatures: GeoJSON.Feature[] = [];
+    for (const route of routes) {
+      if (route.cities.length === cities.length && route.cities.every((c, i) => c.id === cities[i].id)) continue;
       
-      for (const route of routes) {
-        // Skip active route
-        if (route.cities.length === cities.length && route.cities.every((c, i) => c.id === cities[i].id)) {
-           continue;
+      for (let i = 0; i < route.cities.length - 1; i++) {
+        const cacheKey = `${route.cities[i].id}-${route.cities[i+1].id}`;
+        let coords = osrmCacheRef.current[cacheKey];
+        if (!coords) {
+          try {
+             const res = await fetch(`https://router.project-osrm.org/route/v1/driving/${route.cities[i].lng},${route.cities[i].lat};${route.cities[i+1].lng},${route.cities[i+1].lat}?geometries=geojson`);
+             const data = await res.json();
+             if (data.routes && data.routes[0]) {
+               coords = data.routes[0].geometry.coordinates;
+               osrmCacheRef.current[cacheKey] = coords;
+             }
+          } catch(e) {}
         }
-        
-        for (let i = 0; i < route.cities.length - 1; i++) {
-          const cacheKey = `${route.cities[i].id}-${route.cities[i+1].id}`;
-          let coords = osrmCacheRef.current[cacheKey];
-          
-          if (!coords) {
-             try {
-               const res = await fetch(`https://router.project-osrm.org/route/v1/driving/${route.cities[i].lng},${route.cities[i].lat};${route.cities[i+1].lng},${route.cities[i+1].lat}?geometries=geojson`);
-               const data = await res.json();
-               if (data.routes && data.routes[0]) {
-                 coords = data.routes[0].geometry.coordinates;
-                 osrmCacheRef.current[cacheKey] = coords;
-               }
-             } catch (e) {}
-          }
-          
-          const finalCoords = coords || greatCircleArc(route.cities[i], route.cities[i + 1], 120);
-          allFeatures.push({
-            type: 'Feature',
-            properties: {},
-            geometry: { type: 'LineString', coordinates: finalCoords }
-          });
-        }
-      }
-      
-      if (map.getSource('inactive-routes')) {
-        (map.getSource('inactive-routes') as GeoJSONSource).setData({
-          type: 'FeatureCollection',
-          features: allFeatures,
+        const finalCoords = coords || greatCircleArc(route.cities[i], route.cities[i + 1], 120);
+        allFeatures.push({
+          type: 'Feature',
+          properties: {},
+          geometry: { type: 'LineString', coordinates: finalCoords }
         });
       }
-    })();
+    }
+    if (map.getSource('inactive-routes')) {
+      (map.getSource('inactive-routes') as GeoJSONSource).setData({
+        type: 'FeatureCollection',
+        features: allFeatures,
+      });
+    }
+  }
+
+  useEffect(() => {
+    if (mapRef.current && routeInitializedRef.current) {
+      updateInactiveRoutes(mapRef.current);
+    }
   }, [routes, cities, mapStyle]);
+
 
   // ── 3. Cities update ─────────────────────────────────────────────────────────
   useEffect(() => {
