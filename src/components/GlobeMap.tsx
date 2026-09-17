@@ -286,7 +286,7 @@ export default function GlobeMap({
         paint: {
           'line-color': '#ffffff',
           'line-width': width,
-          'line-opacity': 0.15,
+          'line-opacity': 0.5,
           'line-dasharray': [2, 2],
         },
       });
