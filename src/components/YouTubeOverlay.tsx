@@ -185,7 +185,8 @@ export default function YouTubeOverlay({ state, startAnimation, stopAnimation, i
       }}
       minWidth={200}
       minHeight={136}
-      lockAspectRatio={320/204}
+      lockAspectRatio={16/9}
+      lockAspectRatioExtraHeight={24}
       bounds="parent"
       dragHandleClassName="drag-handle"
       className={`rounded-xl overflow-hidden shadow-[0_25px_50px_-12px_rgba(0,0,0,0.8),0_0_30px_rgba(0,0,0,0.5)] border border-white/20 bg-black/60 backdrop-blur-md flex flex-col transition-opacity duration-1000 ${isPositioned ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
