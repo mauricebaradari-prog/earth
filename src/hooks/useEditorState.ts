@@ -110,6 +110,21 @@ export const ROUTES: RouteConfig[] = [
     durationSeconds: 1679, // ~28 minutes
     routeColor: '#CCFF00',
   },
+  {
+    id: 'route-5',
+    name: 'Kouklia → Salamiou',
+    cities: [
+      { id: 'r5-1', name: 'Kouklia', country: 'Cyprus', lat: 34.7173647, lng: 32.5556329 },
+      { id: 'r5-2', name: 'WP2', country: 'Cyprus', lat: 34.7206934, lng: 32.5609284 },
+      { id: 'r5-3', name: 'WP3', country: 'Cyprus', lat: 34.7312048, lng: 32.5718749 },
+      { id: 'r5-4', name: 'WP4', country: 'Cyprus', lat: 34.8396497, lng: 32.6909006 },
+      { id: 'r5-5', name: 'WP5', country: 'Cyprus', lat: 34.8394256, lng: 32.6931351 },
+      { id: 'r5-6', name: 'Salamiou', country: 'Cyprus', lat: 34.8398585, lng: 32.6981934 },
+    ],
+    videoId: 'mxQj61ZXZ9k',
+    durationSeconds: 1621, // ~27 minutes
+    routeColor: '#CCFF00',
+  },
 ];
 
 function getActiveRoute(routes: RouteConfig[], activeId: string): RouteConfig {
