@@ -121,8 +121,8 @@ export const ROUTES: RouteConfig[] = [
       { id: 'r5-5', name: 'WP5', country: 'Cyprus', lat: 34.8394256, lng: 32.6931351 },
       { id: 'r5-6', name: 'Salamiou', country: 'Cyprus', lat: 34.8398585, lng: 32.6981934 },
     ],
-    videoId: 'mxQj61ZXZ9k',
-    durationSeconds: 1621, // ~27 minutes
+    videoId: 'egt_6nv4W0U',
+    durationSeconds: 1388, // ~23 minutes
     routeColor: '#CCFF00',
   },
 ];
