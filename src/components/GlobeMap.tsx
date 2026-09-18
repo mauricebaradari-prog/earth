@@ -864,7 +864,7 @@ export default function GlobeMap({
                   <div style={{
                     position: 'absolute', left: `${leftPct}%`, bottom: `${bottomPct}%`,
                     transform: 'translate(-50%, 50%)',
-                    width: '6px', height: '6px', backgroundColor: '#CCFF00', borderRadius: '50%', border: '1px solid black', zIndex: 21, pointerEvents: 'none', transition: 'none'
+                    width: '10px', height: '10px', backgroundColor: '#CCFF00', borderRadius: '50%', border: '2px solid black', zIndex: 21, pointerEvents: 'none', transition: 'none'
                   }} />
                   <div style={{ 
                     position: 'absolute', left: `${leftPct}%`, bottom: `${bottomPct}%`, 
