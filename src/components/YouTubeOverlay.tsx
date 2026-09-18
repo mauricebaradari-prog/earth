@@ -107,8 +107,11 @@ export default function YouTubeOverlay({ state, startAnimation, stopAnimation, i
             setVideoTitle(data.title);
           }
         } catch(e) {}
-        // Pause it so it doesn't autoplay
-        try { playerRef.current.pauseVideo(); } catch(e) {}
+        // Pause it so it doesn't autoplay, but only if we are not animating!
+        const currentState = (window as any).__EDITOR_STATE;
+        if (!currentState?.isAnimating) {
+          try { playerRef.current.pauseVideo(); } catch(e) {}
+        }
         isInternalChange.current = false;
       }, 1500);
     }
