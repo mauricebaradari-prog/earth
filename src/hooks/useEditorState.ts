@@ -91,6 +91,25 @@ export const ROUTES: RouteConfig[] = [
     durationSeconds: 30 * 60 + 1, // 30:01
     routeColor: '#CCFF00',
   },
+  {
+    id: 'route-4',
+    name: 'Salamiou → Mandria',
+    cities: [
+      { id: 'r4-1', name: 'Salamiou', country: 'Cyprus', lat: 34.8388912, lng: 32.6926334 },
+      { id: 'r4-2', name: 'WP2', country: 'Cyprus', lat: 34.8402633, lng: 32.689599 },
+      { id: 'r4-3', name: 'WP3', country: 'Cyprus', lat: 34.841061, lng: 32.6918165 },
+      { id: 'r4-4', name: 'WP4', country: 'Cyprus', lat: 34.8431958, lng: 32.6977263 },
+      { id: 'r4-5', name: 'WP5', country: 'Cyprus', lat: 34.857967, lng: 32.7290852 },
+      { id: 'r4-6', name: 'WP6', country: 'Cyprus', lat: 34.8443473, lng: 32.7424511 },
+      { id: 'r4-7', name: 'WP7', country: 'Cyprus', lat: 34.8728506, lng: 32.7962794 },
+      { id: 'r4-8', name: 'WP8', country: 'Cyprus', lat: 34.8710617, lng: 32.8117429 },
+      { id: 'r4-9', name: 'WP9', country: 'Cyprus', lat: 34.8697019, lng: 32.8267944 },
+      { id: 'r4-10', name: 'Mandria', country: 'Cyprus', lat: 34.8697574, lng: 32.8289984 },
+    ],
+    videoId: 'nPGyzPP7-o0',
+    durationSeconds: 1679, // ~28 minutes
+    routeColor: '#CCFF00',
+  },
 ];
 
 function getActiveRoute(routes: RouteConfig[], activeId: string): RouteConfig {
