@@ -426,6 +426,10 @@ export default function GlobeMap({
         [startCity, endCity].forEach((city, idx) => {
           const el = document.createElement('div');
           el.innerHTML = getCityMarkerHTML(idx === 0 ? 'A' : 'B', city.name, idx === 0, idx === 1, route.id, false);
+          el.style.opacity = '0.5';
+          el.style.transition = 'opacity 0.2s';
+          el.addEventListener('mouseenter', () => el.style.opacity = '1');
+          el.addEventListener('mouseleave', () => el.style.opacity = '0.5');
           if (idx === 0) {
             el.style.cursor = 'pointer';
             el.addEventListener('click', () => {
@@ -766,7 +770,7 @@ export default function GlobeMap({
           </linearGradient>
         </defs>
         <path d={fullSvgPath} fill="none" stroke={animationProgress === 0 ? routeColor : 'rgba(255, 255, 255, 0.3)'} strokeWidth={routeWidth * 1.5 + 2} strokeLinecap="round" strokeLinejoin="round" />
-        {inactiveSvgPath && <path d={inactiveSvgPath} fill="none" stroke={routeColor} strokeWidth={routeWidth * 1.5 + 2} strokeLinecap="round" strokeLinejoin="round" />}
+        {inactiveSvgPath && <path d={inactiveSvgPath} fill="none" stroke={routeColor} strokeWidth={routeWidth * 1.5 + 2} strokeLinecap="round" strokeLinejoin="round" opacity={0.5} />}
         <path d={svgPath} fill="none" stroke="url(#routeGrad)" strokeWidth={routeWidth * 1.5 + 2} strokeLinecap="round" strokeLinejoin="round" />
       </svg>
       {vehicleDot && (
