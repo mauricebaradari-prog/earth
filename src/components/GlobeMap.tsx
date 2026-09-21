@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useRef, useEffect } from 'react';
-import { GripHorizontal } from 'lucide-react';
+import { GripHorizontal, Gauge, Mountain, Compass } from 'lucide-react';
 //  { useEffect, useRef, useState } from 'react';
 import * as maplibregl from 'maplibre-gl';
 import { Rnd } from 'react-rnd';
@@ -25,7 +25,7 @@ function getDistance(p1: [number, number], p2: [number, number]) {
 
 interface GlobeMapProps {
   cities: City[];
-  routes?: { id: string; name: string; cities: City[] }[];
+  routes?: { id: string; name: string; cities: City[]; videoId?: string; forceStraight?: boolean; }[];
   vehicle: VehicleConfig;
   mapStyle: MapStyleId;
   animationProgress: number; // 0-1
@@ -37,14 +37,53 @@ interface GlobeMapProps {
   durationSeconds: number;
   onPoint1Projected?: (x: number, y: number) => void;
   showElevation?: boolean;
+  showVelocity?: boolean;
+  showCompass?: boolean;
+  useGpsTrace?: boolean;
   onSeek?: (progress: number) => void;
-  activeWindow?: 'video' | 'elevation' | null;
-  setActiveWindow?: (w: 'video' | 'elevation') => void;
+  activeWindow?: 'video' | 'elevation' | 'velocity' | null;
+  setActiveWindow?: (w: 'video' | 'elevation' | 'velocity') => void;
   onPlayRoute?: (routeId: string) => void;
   onStopRoute?: () => void;
 }
 
+
+// Smooths a polyline using Chaikin's algorithm
+function smoothCoords(coords: [number, number][], iterations = 2): [number, number][] {
+  if (coords.length < 3) return coords;
+  let current = [...coords];
+  for (let iter = 0; iter < iterations; iter++) {
+    const next: [number, number][] = [];
+    next.push(current[0]);
+    for (let i = 0; i < current.length - 1; i++) {
+      const p0 = current[i];
+      const p1 = current[i + 1];
+      const q = [0.75 * p0[0] + 0.25 * p1[0], 0.75 * p0[1] + 0.25 * p1[1]] as [number, number];
+      const r = [0.25 * p0[0] + 0.75 * p1[0], 0.25 * p0[1] + 0.75 * p1[1]] as [number, number];
+      next.push(q);
+      next.push(r);
+    }
+    next.push(current[current.length - 1]);
+    current = next;
+  }
+  return current;
+}
+
+
+function getDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371; // Radius of the earth in km
+  const dLat = (lat2 - lat1) * Math.PI / 180;  
+  const dLon = (lon2 - lon1) * Math.PI / 180; 
+  const a = 
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+    Math.sin(dLon/2) * Math.sin(dLon/2); 
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
+  return R * c;
+}
+
 export default function GlobeMap({
+
   cities,
   routes,
   vehicle,
@@ -58,6 +97,9 @@ export default function GlobeMap({
   durationSeconds,
   onPoint1Projected,
   showElevation = true,
+  showVelocity = true,
+  showCompass = true,
+  useGpsTrace = false,
   onSeek,
   activeWindow,
   setActiveWindow,
@@ -69,17 +111,13 @@ export default function GlobeMap({
   const prevStyleRef = useRef<string | null>(null);
   const routeInitializedRef = useRef(false);
   const markersRef = useRef<maplibregl.Marker[]>([]);
+  const routeMarkersRef = useRef<maplibregl.Marker[]>([]);
   const inactiveMarkersRef = useRef<maplibregl.Marker[]>([]);
   const initialCameraRef = useRef<{center: {lng: number, lat: number}, zoom: number, pitch: number, bearing: number, timestamp: number} | null>(null);
   
   const renderPassRef = useRef<number>(0);
-      const [vehicleDot, setVehicleDot] = React.useState<{x:number,y:number}|null>(null);
-  const [distanceBadge, setDistanceBadge] = React.useState<{x:number, y:number, text: string, text2: string}|null>(null);
-  const [elevationProfile, setElevationProfile] = React.useState<number[] | null>(null);
-  const [fullSvgPath, setFullSvgPath] = React.useState<string>('');
-  const [svgPath, setSvgPath] = React.useState<string>('');
-  const [inactiveSvgPath, setInactiveSvgPath] = React.useState<string>('');
-  const inactiveRouteCoordsRef = useRef<[number, number][][]>([]);
+          const [elevationProfile, setElevationProfile] = React.useState<number[] | null>(null);
+        const inactiveRouteCoordsRef = useRef<[number, number][][]>([]);
   const animProgressRef = useRef(animationProgress);
   const durationRef = useRef(durationSeconds);
   
@@ -88,7 +126,33 @@ export default function GlobeMap({
     durationRef.current = durationSeconds;
   }, [animationProgress, durationSeconds]);
 
+    const velocityTextRef = React.useRef<HTMLSpanElement>(null);
+  const velocityNeedleRef = React.useRef<SVGGElement>(null);
+  const headingTextRef = React.useRef<HTMLSpanElement>(null);
+  const compassNeedleRef = React.useRef<SVGGElement>(null);
+  const vehicleDotRef = React.useRef<HTMLDivElement>(null);
+  const distanceBadgeRef = React.useRef<HTMLDivElement>(null);
+  const distanceTextRef = React.useRef<HTMLSpanElement>(null);
+  const distanceTimeRef = React.useRef<HTMLSpanElement>(null);
+  const fullSvgPathRef = React.useRef<SVGPathElement>(null);
+  const svgPathRef = React.useRef<SVGPathElement>(null);
   const osrmCacheRef = useRef<Record<string, [number, number][]>>({});
+  
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('osrmCache');
+      if (stored) {
+        osrmCacheRef.current = JSON.parse(stored);
+      }
+    } catch(e) {}
+  }, []);
+  
+  const saveOsrmCache = () => {
+    try {
+      localStorage.setItem('osrmCache', JSON.stringify(osrmCacheRef.current));
+    } catch(e) {}
+  };
+
   const osrmDistCacheRef = useRef<Record<string, number[]>>({});
   const midLngLatRef = useRef<[number, number] | null>(null);
   const vehicleLngLatRef = useRef<[number, number] | null>(null);
@@ -157,60 +221,66 @@ export default function GlobeMap({
           if (!mapRef.current) return;
           
           let fullPts = fullRouteCoordsRef.current;
-
-
           const currentProgress = animProgressRef.current;
           const currentDuration = durationRef.current;
+          
           if (currentProgress === 0 && fullPts.length > 0 && onPoint1Projected) {
              const p1 = mapRef.current.project([fullPts[0][0], fullPts[0][1]]);
-             // Only call if it moved significantly to avoid spam
              if (!(window as any)._lastP1 || Math.abs((window as any)._lastP1.x - p1.x) > 10 || Math.abs((window as any)._lastP1.y - p1.y) > 10) {
                (window as any)._lastP1 = { x: p1.x, y: p1.y };
-               onPoint1Projected(p1.x, p1.y);
+               Promise.resolve().then(() => onPoint1Projected(p1.x, p1.y));
              }
           }
+          
+          // Decimate for performance
+          const step = Math.max(1, Math.floor(fullPts.length / 500));
           const screenPts = [];
-          for (const c of fullPts) {
-             if (!mapRef.current) continue;
-                 const p = mapRef.current.project([c[0], c[1]]);
+          for (let i = 0; i < fullPts.length; i += step) {
+             const p = mapRef.current.project([fullPts[i][0], fullPts[i][1]]);
              screenPts.push(`${p.x},${p.y}`);
           }
-          if (screenPts.length > 0) setFullSvgPath(`M ${screenPts.join(' L ')}`);
-
-          // Project inactive routes to SVG
-          const inactiveSegments: string[] = [];
-          for (const seg of inactiveRouteCoordsRef.current) {
-            const segPts: string[] = [];
-            for (const c of seg) {
-              if (!mapRef.current) continue;
-              const p = mapRef.current.project([c[0], c[1]]);
-              segPts.push(`${p.x},${p.y}`);
-            }
-            if (segPts.length > 0) inactiveSegments.push(`M ${segPts.join(' L ')}`);
+          if (fullPts.length > 0 && (fullPts.length - 1) % step !== 0) {
+             const p = mapRef.current.project([fullPts[fullPts.length - 1][0], fullPts[fullPts.length - 1][1]]);
+             screenPts.push(`${p.x},${p.y}`);
           }
-          setInactiveSvgPath(inactiveSegments.join(' '));
+          if (fullSvgPathRef.current) {
+             if (screenPts.length > 0) {
+               fullSvgPathRef.current.setAttribute('d', `M ${screenPts.join(' L ')}`);
+             } else {
+               fullSvgPathRef.current.setAttribute('d', '');
+             }
+          }
 
           const pts: string[] = [];
           routeCoordsRef.current.forEach((feat) => {
             if (feat.geometry.type === 'LineString') {
                const coords = feat.geometry.coordinates as [number, number][];
-               for (const c of coords) {
-                 if (!mapRef.current) continue;
-                 const p = mapRef.current.project([c[0], c[1]]);
+               const rStep = Math.max(1, Math.floor(coords.length / 500));
+               for (let i = 0; i < coords.length; i += rStep) {
+                 const p = mapRef.current!.project([coords[i][0], coords[i][1]]);
+                 pts.push(`${p.x},${p.y}`);
+               }
+               if (coords.length > 0 && (coords.length - 1) % rStep !== 0) {
+                 const p = mapRef.current!.project([coords[coords.length - 1][0], coords[coords.length - 1][1]]);
                  pts.push(`${p.x},${p.y}`);
                }
             }
           });
-          if (pts.length > 0) {
-            setSvgPath(`M ${pts.join(' L ')}`);
+          if (svgPathRef.current) {
+            if (pts.length > 0) {
+              svgPathRef.current.setAttribute('d', `M ${pts.join(' L ')}`);
+            } else {
+              svgPathRef.current.setAttribute('d', '');
+            }
           }
 
           if (vehicleLngLatRef.current) {
              const p = mapRef.current.project(vehicleLngLatRef.current);
-             setVehicleDot({ x: p.x, y: p.y });
              
-             const currentProgress = animProgressRef.current;
-             const currentDuration = durationRef.current;
+             if (vehicleDotRef.current) {
+                 vehicleDotRef.current.style.transform = `translate(${p.x}px, ${p.y}px)`;
+                 vehicleDotRef.current.style.display = 'block';
+             }
              
              let displayDist = totalDistRef.current / 1000;
              let displaySecs = currentDuration;
@@ -223,11 +293,66 @@ export default function GlobeMap({
              const distKm = displayDist.toFixed(0);
              const m = Math.floor(displaySecs / 60);
              const s = Math.floor(displaySecs % 60);
-             setDistanceBadge({
-               x: p.x, y: p.y,
-               text: `${distKm} km`,
-               text2: `${m}m ${s}s`
-             });
+
+             if (velocityTextRef.current) {
+                const exactIdx = currentProgress * (fullPts.length - 1);
+                const pIdx = Math.min(Math.floor(exactIdx), fullPts.length - 2);
+                const wp1 = fullPts[pIdx];
+                const wp2 = fullPts[pIdx + 1];
+                let segDistKm = 0;
+                if (wp1 && wp2) {
+                   segDistKm = getDistanceKm(wp1[1], wp1[0], wp2[1], wp2[0]);
+                }
+                const timeSecs = currentDuration / Math.max(1, fullPts.length - 1);
+                let speedKmh = (segDistKm / timeSecs) * 3600;
+                
+                 // Extremely simple low-pass filter for smooth velocity numbers
+                 if (!(window as any)._smoothSpeed || Math.abs((window as any)._smoothSpeed - speedKmh) > 50) {
+                     (window as any)._smoothSpeed = speedKmh;
+                 } else {
+                     (window as any)._smoothSpeed = (window as any)._smoothSpeed * 0.95 + speedKmh * 0.05;
+                 }
+                 
+                 const currentSpeed = (window as any)._smoothSpeed;
+                 velocityTextRef.current.textContent = `${Math.round(currentSpeed)}`;
+                 if (velocityNeedleRef.current) {
+                     // Map 0 - 150 km/h to -90 to +90 degrees
+                     const clampedSpeed = Math.max(0, Math.min(150, currentSpeed));
+                     const angle = -90 + (clampedSpeed / 150) * 180;
+                     velocityNeedleRef.current.style.transform = `rotate(${angle}deg)`;
+                 }
+             }
+
+             if (headingTextRef.current || compassNeedleRef.current) {
+                 const exactIdx = currentProgress * (fullPts.length - 1);
+                 const pIdx = Math.min(Math.floor(exactIdx), fullPts.length - 2);
+                 const wp1 = fullPts[pIdx];
+                 const wp2 = fullPts[pIdx + 1];
+                 if (wp1 && wp2) {
+                     const heading = headingOnPath(fullPts, currentProgress);
+                     let normalized = heading < 0 ? heading + 360 : heading;
+                     if (compassNeedleRef.current) {
+                         compassNeedleRef.current.style.transform = `rotate(${normalized}deg)`;
+                     }
+                     if (headingTextRef.current) {
+                         const dirs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW", "N"];
+                         const idx = Math.round(normalized / 45);
+                         headingTextRef.current.textContent = `${dirs[idx]} ${Math.round(normalized)}°`;
+                     }
+                 }
+             }
+             
+             if (distanceBadgeRef.current && distanceTextRef.current && distanceTimeRef.current) {
+                 distanceBadgeRef.current.style.transform = `translate(${p.x}px, ${p.y}px)`;
+                 distanceBadgeRef.current.style.display = 'flex';
+                 distanceTextRef.current.textContent = `${distKm} km`;
+                 distanceTimeRef.current.textContent = `${m}m ${s}s`;
+             }
+          } else {
+             if (velocityTextRef.current) velocityTextRef.current.textContent = "0";
+             if (velocityNeedleRef.current) velocityNeedleRef.current.style.transform = 'rotate(-90deg)';
+             if (vehicleDotRef.current) vehicleDotRef.current.style.display = 'none';
+             if (distanceBadgeRef.current) distanceBadgeRef.current.style.display = 'none';
           }
         } catch (e) {
            console.error(e);
@@ -238,7 +363,7 @@ export default function GlobeMap({
       map.on('move', updateSvgOverlay);
       map.on('zoom', updateSvgOverlay);
       map.on('pitch', updateSvgOverlay);
-      map.on('render', updateSvgOverlay);
+      // map.on('render', updateSvgOverlay); removed to prevent infinite loops
 
       map.once('style.load', () => {
         (map as any).setProjection({ type: 'globe' });
@@ -379,29 +504,48 @@ export default function GlobeMap({
     const allFeatures: GeoJSON.Feature[] = [];
     const allCoordSegments: [number, number][][] = [];
     
+    let didFetch = false;
+    const fetchPromises = [];
+
+    // First pass: collect missing fetches
     for (const route of routes) {
       const isActive = route.cities.length === cities.length && route.cities.every((c, i) => c.id === cities[i].id);
       if (isActive) continue;
-      
       for (let i = 0; i < route.cities.length - 1; i++) {
         const cacheKey = `${route.cities[i].id}-${route.cities[i+1].id}`;
-        let coords = osrmCacheRef.current[cacheKey];
-        if (!coords) {
-          try {
-             const res = await fetch(`https://router.project-osrm.org/route/v1/driving/${route.cities[i].lng},${route.cities[i].lat};${route.cities[i+1].lng},${route.cities[i+1].lat}?geometries=geojson`);
-             const data = await res.json();
-             if (data.routes && data.routes[0]) {
-               coords = data.routes[0].geometry.coordinates;
-               osrmCacheRef.current[cacheKey] = coords;
-             }
-          } catch(e) {}
+        if (!osrmCacheRef.current[cacheKey] && !route.forceStraight) {
+          const p = fetch(`https://router.project-osrm.org/route/v1/driving/${route.cities[i].lng},${route.cities[i].lat};${route.cities[i+1].lng},${route.cities[i+1].lat}?geometries=geojson`)
+            .then(res => res.json())
+            .then(data => {
+               if (data.routes && data.routes[0]) {
+                 osrmCacheRef.current[cacheKey] = data.routes[0].geometry.coordinates;
+                 didFetch = true;
+               }
+            }).catch(() => {});
+          fetchPromises.push(p);
         }
-        const finalCoords = coords || greatCircleArc(route.cities[i], route.cities[i + 1], 120);
+      }
+    }
+    
+    // Wait for all fetches in parallel
+    if (fetchPromises.length > 0) {
+      await Promise.all(fetchPromises);
+      if (didFetch) saveOsrmCache();
+    }
+
+    // Second pass: build segments
+    for (const route of routes) {
+      const isActive = route.cities.length === cities.length && route.cities.every((c, i) => c.id === cities[i].id);
+      if (isActive) continue;
+      for (let i = 0; i < route.cities.length - 1; i++) {
+        const cacheKey = `${route.cities[i].id}-${route.cities[i+1].id}`;
+        const coords = osrmCacheRef.current[cacheKey] || greatCircleArc(route.cities[i], route.cities[i + 1], 120);
+        const finalCoords = route.forceStraight ? smoothCoords(coords, 3) : coords;
         allCoordSegments.push(finalCoords);
         allFeatures.push({
           type: 'Feature',
           properties: {},
-          geometry: { type: 'LineString', coordinates: finalCoords }
+          geometry: { type: 'LineString', coordinates: coords }
         });
       }
     }
@@ -414,13 +558,68 @@ export default function GlobeMap({
         features: allFeatures,
       });
     }
-    // Add start/end markers for inactive routes
+    // Add start/end markers AND YouTube preview markers for inactive routes
     inactiveMarkersRef.current.forEach(m => m.remove());
     inactiveMarkersRef.current = [];
     import('maplibre-gl').then(({ Marker }) => {
       for (const route of routes) {
         const isActive = route.cities.length === cities.length && route.cities.every((c, i) => c.id === cities[i].id);
         if (isActive) continue;
+        
+        // --- YOUTUBE PREVIEW MARKER ON EXACT ROUTE MIDPOINT ---
+        let allRouteCoords: [number, number][] = [];
+        for (let i = 0; i < route.cities.length - 1; i++) {
+            const cacheKey = `${route.cities[i].id}-${route.cities[i+1].id}`;
+            const coords = osrmCacheRef.current[cacheKey] || greatCircleArc(route.cities[i], route.cities[i + 1], 120);
+            allRouteCoords = allRouteCoords.concat(coords);
+        }
+        
+        if (allRouteCoords.length > 0) {
+            const exactMidCoord = allRouteCoords[Math.floor(allRouteCoords.length / 2)];
+            
+            const ytEl = document.createElement('div');
+            ytEl.className = 'route-preview-marker-container cursor-pointer';
+            ytEl.style.zIndex = '40';
+            
+            const inner = document.createElement('div');
+            inner.className = 'relative group transition-transform hover:scale-110 hover:z-50';
+            inner.style.width = '90px';
+            inner.style.height = '60px';
+            inner.style.borderRadius = '8px';
+            inner.style.overflow = 'hidden';
+            inner.style.border = '2px solid rgba(255, 255, 255, 0.4)';
+            inner.style.boxShadow = '0 10px 25px -5px rgba(0, 0, 0, 0.5)';
+            
+            const img = document.createElement('img');
+            img.src = route.videoId ? `https://img.youtube.com/vi/${route.videoId}/mqdefault.jpg` : 'https://images.unsplash.com/photo-1542281286-9e0a16bb7366?auto=format&fit=crop&w=300&q=80';
+            img.style.width = '100%';
+            img.style.height = '100%';
+            img.style.objectFit = 'cover';
+            inner.appendChild(img);
+
+            const overlay = document.createElement('div');
+            overlay.className = 'absolute inset-0 bg-black/40 flex items-center justify-center opacity-70 group-hover:opacity-100 transition-opacity';
+            overlay.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="white" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>`;
+            inner.appendChild(overlay);
+            
+            const title = document.createElement('div');
+            title.className = 'absolute bottom-0 w-full bg-black/70 text-white text-[9px] font-bold px-1 py-0.5 truncate text-center';
+            title.innerText = route.name || 'Route';
+            inner.appendChild(title);
+            
+            ytEl.appendChild(inner);
+            
+            ytEl.onclick = (e) => {
+              e.stopPropagation();
+              if (onPlayRoute) onPlayRoute(route.id);
+            };
+
+            const ytMarker = new Marker({ element: ytEl })
+              .setLngLat(exactMidCoord)
+              .addTo(map);
+            inactiveMarkersRef.current.push(ytMarker);
+        }
+
         const startCity = route.cities[0];
         const endCity = route.cities[route.cities.length - 1];
         [startCity, endCity].forEach((city, idx) => {
@@ -497,40 +696,77 @@ export default function GlobeMap({
     const lDists: number[] = [];
     const allFeatures: GeoJSON.Feature[] = [];
 
+    let didFetch = false;
+    const fetchPromises = [];
+    
+    const activeRoute = routes?.find(r => r.cities.length === cities.length && r.cities.every((c, idx) => c.id === cities[idx].id));
+
     for (let i = 0; i < cities.length - 1; i++) {
-      let routeCoords = null;
-      try {
-        if (renderPassRef.current !== passId) return;
-        const cacheKey = `${cities[i].id}-${cities[i+1].id}`;
-        if (osrmCacheRef.current[cacheKey]) {
-           routeCoords = osrmCacheRef.current[cacheKey];
-        } else {
-           const res = await fetch(`https://router.project-osrm.org/route/v1/driving/${cities[i].lng},${cities[i].lat};${cities[i+1].lng},${cities[i+1].lat}?geometries=geojson`);
-           const data = await res.json();
-           if (data.routes && data.routes[0]) {
-             routeCoords = data.routes[0].geometry.coordinates;
-           }
-        }
-      } catch (e) {
-        console.warn("OSRM fetch failed, using fallback");
+      const cacheKey = `${cities[i].id}-${cities[i+1].id}`;
+      if (!osrmCacheRef.current[cacheKey] && !activeRoute?.forceStraight) {
+        const p = fetch(`https://router.project-osrm.org/route/v1/driving/${cities[i].lng},${cities[i].lat};${cities[i+1].lng},${cities[i+1].lat}?geometries=geojson`)
+          .then(res => res.json())
+          .then(data => {
+            if (data.routes && data.routes[0]) {
+              osrmCacheRef.current[cacheKey] = data.routes[0].geometry.coordinates;
+              didFetch = true;
+            }
+          }).catch(() => {});
+        fetchPromises.push(p);
       }
-
-      const finalCoords = routeCoords || greatCircleArc(cities[i], cities[i + 1], 120);
-      osrmCacheRef.current[`${cities[i].id}-${cities[i+1].id}`] = finalCoords;
-
-      let legDist = 0;
-      for (let j = 0; j < finalCoords.length - 1; j++) {
-        legDist += distance(finalCoords[j], finalCoords[j+1]);
-      }
-      lDists.push(legDist);
-      totalPathDist += legDist;
-
-      allFeatures.push({
-        type: 'Feature',
-        properties: {},
-        geometry: { type: 'LineString', coordinates: finalCoords }
-      });
     }
+
+    if (fetchPromises.length > 0) {
+      await Promise.all(fetchPromises);
+      if (didFetch) saveOsrmCache();
+    }
+
+    if (renderPassRef.current !== passId) return;
+
+    let routeFullCoords: [number, number][] = [];
+    const segmentIndices: number[] = [0];
+
+    for (let i = 0; i < cities.length - 1; i++) {
+      const cacheKey = `${cities[i].id}-${cities[i+1].id}`;
+      let coords = osrmCacheRef.current[cacheKey] || greatCircleArc(cities[i], cities[i + 1], 120);
+      osrmCacheRef.current[cacheKey] = coords; // cache original
+      if (i > 0 && coords.length > 0) coords = coords.slice(1);
+      routeFullCoords.push(...coords);
+      segmentIndices.push(routeFullCoords.length - 1);
+    }
+
+    if (activeRoute?.forceStraight) {
+      routeFullCoords = smoothCoords(routeFullCoords, 3);
+      // Re-map segment distances roughly (smoothing shrinks distance slightly, but close enough for animation)
+    }
+
+    let legDist = 0;
+    for (let j = 0; j < routeFullCoords.length - 1; j++) {
+      legDist += distance(routeFullCoords[j], routeFullCoords[j+1]);
+    }
+    
+    if (activeRoute?.forceStraight && cities.length > 0) {
+       // Treat as a single segment for progress animation
+       const fullKey = `${cities[0].id}-${cities[cities.length-1].id}`;
+       osrmCacheRef.current[fullKey] = routeFullCoords;
+       lDists.push(legDist);
+    } else {
+       // Restore original lDists for non-smoothed segmented routes
+       for (let i = 0; i < cities.length - 1; i++) {
+          const cacheKey = `${cities[i].id}-${cities[i+1].id}`;
+          const segCoords = osrmCacheRef.current[cacheKey];
+          let d = 0;
+          for(let k=0; k<segCoords.length-1; k++) d += distance(segCoords[k], segCoords[k+1]);
+          lDists.push(d);
+       }
+    }
+    totalPathDist = legDist;
+
+    allFeatures.push({
+      type: 'Feature',
+      properties: {},
+      geometry: { type: 'LineString', coordinates: routeFullCoords }
+    });
 
     if (allFeatures.length > 0) {
       const allCoords = allFeatures.flatMap(f => (f.geometry as any).coordinates);
@@ -576,7 +812,7 @@ export default function GlobeMap({
         .catch(e => console.error("Elevation fetch failed", e));
     }
 
-    updateRouteProgress(map, cities, animationProgress, totalPathDist, lDists);
+    updateRouteProgress(map, (useGpsTrace || activeRoute?.forceStraight) && cities.length > 0 ? [cities[0], cities[cities.length-1]] : cities, animationProgress, totalPathDist, lDists);
   }
 
   function updateRouteProgress(
@@ -587,7 +823,10 @@ export default function GlobeMap({
     legDists: number[]
   ) {
     
-    if (!map.getSource('route') || legDists.length !== cs.length - 1) return;
+    if (!map.getSource('route') || legDists.length !== cs.length - 1) {
+      console.log('Progress abort:', { hasSource: !!map.getSource('route'), legDistsLen: legDists.length, expected: cs.length - 1 });
+      return;
+    }
 
     let remaining = progress;
     let vehiclePoint = (progress === 0 && midLngLatRef.current) ? midLngLatRef.current : (cs[0] ? [cs[0].lng, cs[0].lat] : [0,0]);
@@ -661,7 +900,8 @@ export default function GlobeMap({
       if (cameraMode === 'orbit') {
         targetBearing = progress * 360;
       } else if (cameraMode === 'follow') {
-        targetBearing = headingOnPath(fullRouteCoordsRef.current, progress);
+        // User requested no rotation for Follow mode, keep the current bearing or reset to 0
+        // targetBearing = map.getBearing(); 
       }
       
       const targetZoom = Math.max(map.getZoom(), 8);
@@ -752,12 +992,15 @@ export default function GlobeMap({
 
   useEffect(() => {
     if (mapRef.current && routeInitializedRef.current) {
-      updateRouteProgress(mapRef.current, cities, animationProgress, totalDistRef.current, legDistancesRef.current);
+      const activeRoute = routes?.find(r => r.cities.length === cities.length && r.cities.every((c, idx) => c.id === cities[idx].id));
+      const cs = (useGpsTrace || activeRoute?.forceStraight) && cities.length > 0 ? [cities[0], cities[cities.length-1]] : cities;
+      updateRouteProgress(mapRef.current, cs, animationProgress, totalDistRef.current, legDistancesRef.current);
       if ((window as any)._updateSvgOverlay) {
         (window as any)._updateSvgOverlay();
       }
     }
-  }, [animationProgress, cities]);
+  }, [animationProgress]);
+
 
   return (
     <div className="w-full h-full relative" ref={containerRef}>
@@ -769,50 +1012,37 @@ export default function GlobeMap({
             <stop offset="100%" stopColor="#CCFF00" />
           </linearGradient>
         </defs>
-        <path d={fullSvgPath} fill="none" stroke={animationProgress === 0 ? routeColor : 'rgba(255, 255, 255, 0.3)'} strokeWidth={routeWidth * 1.5 + 2} strokeLinecap="round" strokeLinejoin="round" />
-        {inactiveSvgPath && <path d={inactiveSvgPath} fill="none" stroke={routeColor} strokeWidth={routeWidth * 1.5 + 2} strokeLinecap="round" strokeLinejoin="round" opacity={0.5} />}
-        <path d={svgPath} fill="none" stroke="url(#routeGrad)" strokeWidth={routeWidth * 1.5 + 2} strokeLinecap="round" strokeLinejoin="round" />
+        <path ref={fullSvgPathRef} fill="none" stroke={animationProgress === 0 ? routeColor : 'rgba(255, 255, 255, 0.3)'} strokeWidth={routeWidth * 1.5 + 2} strokeLinecap="round" strokeLinejoin="round" />
+        
+        <path ref={svgPathRef} fill="none" stroke="url(#routeGrad)" strokeWidth={routeWidth * 1.5} strokeLinecap="round" strokeLinejoin="round" style={{ filter: 'drop-shadow(0 0 8px rgba(204,255,0,0.8))' }} />
       </svg>
-      {vehicleDot && (
-        <div 
-          className="absolute w-3 h-3 bg-white rounded-full shadow-md pointer-events-none z-20 border-[2px]"
-          style={{
-            left: vehicleDot.x,
-            top: vehicleDot.y,
-            borderColor: routeColor,
-            transform: 'translate(-50%, -50%)',
-          }}
-        />
-      )}
-      {distanceBadge && (
-        <div 
-          className=""
-          style={{
-          position: 'absolute',
-          left: distanceBadge.x,
-          top: distanceBadge.y,
-          transform: 'translate(-50%, -50%)',
-          zIndex: 30,
-          pointerEvents: 'none',
-        }}>
-          <div style={{
-            background: 'rgba(26,26,26,0.9)',
-            border: '1px solid rgba(255,255,255,0.1)',
-            backdropFilter: 'blur(8px)',
-            borderRadius: '8px',
-            padding: '4px 8px',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
-            transform: 'translateY(-30px)',
-            lineHeight: 1,
-          }}>
-             <span style={{ color: '#fff', fontSize: '13px', fontWeight: 700, fontFamily: 'sans-serif', marginBottom: '2px' }}>{distanceBadge.text}</span>
-             <span style={{ color: '#9ca3af', fontSize: '10px', fontWeight: 500, fontFamily: 'sans-serif' }}>{distanceBadge.text2}</span>
-          </div>
-        </div>
-      )}
+      <div 
+        ref={vehicleDotRef}
+        className="absolute w-4 h-4 bg-[#CCFF00] rounded-full border-2 border-black pointer-events-none z-20"
+        style={{ 
+          top: 0, left: 0,
+          marginLeft: '-8px', marginTop: '-8px',
+          display: 'none',
+          boxShadow: '0 0 10px rgba(204,255,0,0.5)',
+          willChange: 'transform'
+        }}
+      />
+      
+      <div 
+        ref={distanceBadgeRef}
+        className="absolute pointer-events-none z-20 flex flex-col items-center justify-center bg-black/80 backdrop-blur-md rounded-lg border border-white/10 shadow-xl"
+        style={{
+          top: 0, left: 0,
+          marginLeft: '-35px', marginTop: '-50px',
+          width: '70px', padding: '4px',
+          display: 'none',
+          willChange: 'transform'
+        }}
+      >
+        <span ref={distanceTextRef} className="text-[#CCFF00] font-bold text-xs">0 km</span>
+        <span ref={distanceTimeRef} className="text-white/70 text-[10px] font-medium uppercase tracking-wider">0m 0s</span>
+      </div>
+      
       
       {showElevation && elevationProfile && (
         <Rnd
@@ -824,10 +1054,13 @@ export default function GlobeMap({
           onDragStart={() => setActiveWindow && setActiveWindow('elevation')}
           onMouseDown={() => setActiveWindow && setActiveWindow('elevation')}
         >
-        <div style={{ width: '100%', height: '100%', background: 'linear-gradient(180deg, rgba(17,17,17,0.95) 0%, rgba(17,17,17,0.85) 100%)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.08)', padding: '16px', backdropFilter: 'blur(12px)', boxShadow: '0 8px 32px rgba(0,0,0,0.4)', pointerEvents: 'auto', cursor: 'grab' }} className="active:cursor-grabbing">
+        <div style={{ width: '100%', height: '100%', background: 'linear-gradient(180deg, rgba(17,17,17,0.6) 0%, rgba(17,17,17,0.4) 100%)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.08)', padding: '16px', backdropFilter: 'blur(12px)', boxShadow: '0 8px 32px rgba(0,0,0,0.4)', pointerEvents: 'auto', cursor: 'grab' }} className="active:cursor-grabbing">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }} className="pointer-events-none">
             <div>
-              <h3 style={{ color: '#fff', fontSize: '11px', fontWeight: 700, letterSpacing: '0.05em', margin: '0 0 4px 0', fontFamily: 'sans-serif', textTransform: 'uppercase' }}>Elevation Profile</h3>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                <Mountain size={14} className="text-[#CCFF00]" />
+                <h3 style={{ color: '#fff', fontSize: '11px', fontWeight: 700, letterSpacing: '0.05em', margin: 0, fontFamily: 'sans-serif', textTransform: 'uppercase' }}>Elevation Profile</h3>
+              </div>
               <div style={{ color: '#9ca3af', fontSize: '10px', fontWeight: 500, fontFamily: 'sans-serif', display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <span>{(totalDistRef.current / 1000).toFixed(0)} KM</span>
                 <span style={{ color: '#4b5563' }}>•</span>
@@ -923,6 +1156,101 @@ export default function GlobeMap({
                   );
                 })()}
               </div>
+            </div>
+          </div>
+        </div>
+        </Rnd>
+
+      )}
+      {showVelocity && (
+        <Rnd
+          default={{ x: typeof window !== 'undefined' ? window.innerWidth - 344 : 0, y: 200, width: 320, height: 'auto' }}
+          bounds="parent"
+          enableResizing={false}
+          className="z-50"
+          style={{ zIndex: activeWindow === 'velocity' ? 60 : 50 }}
+          onDragStart={() => setActiveWindow && setActiveWindow('velocity')}
+          onMouseDown={() => setActiveWindow && setActiveWindow('velocity')}
+        >
+        <div style={{ width: '100%', height: '100%', background: 'linear-gradient(180deg, rgba(17,17,17,0.6) 0%, rgba(17,17,17,0.4) 100%)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.08)', padding: '16px', backdropFilter: 'blur(12px)', boxShadow: '0 8px 32px rgba(0,0,0,0.4)', pointerEvents: 'auto', cursor: 'grab' }} className="active:cursor-grabbing">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }} className="pointer-events-none">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Gauge size={14} className="text-[#CCFF00]" />
+              <h3 style={{ color: '#fff', fontSize: '11px', fontWeight: 700, letterSpacing: '0.05em', margin: 0, fontFamily: 'sans-serif', textTransform: 'uppercase' }}>Velocity</h3>
+            </div>
+            <button style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer', padding: '4px' }}>
+              <GripHorizontal size={14} />
+            </button>
+          </div>
+          
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', height: '170px' }} className="pointer-events-none">
+            <svg width="220" height="115" viewBox="0 0 220 115" style={{ overflow: 'visible' }}>
+              <defs>
+                <linearGradient id="gaugeGrad" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stopColor="#ef4444" />
+                  <stop offset="50%" stopColor="#eab308" />
+                  <stop offset="100%" stopColor="#22c55e" />
+                </linearGradient>
+              </defs>
+              <path d="M 30 90 A 80 80 0 0 1 190 90" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="12" strokeLinecap="round" />
+              <path d="M 30 90 A 80 80 0 0 1 190 90" fill="none" stroke="url(#gaugeGrad)" strokeWidth="12" strokeLinecap="round" />
+              
+              <g ref={velocityNeedleRef} style={{ transformOrigin: '110px 90px', transform: 'rotate(-90deg)', willChange: 'transform', transition: 'transform 0.1s linear' }}>
+                <polygon points="107,90 113,90 110,25" fill="#ffffff" />
+                <circle cx="110" cy="90" r="5" fill="#111" stroke="#ffffff" strokeWidth="2" />
+              </g>
+              
+              <text x="30" y="112" fill="#6b7280" fontSize="11" fontFamily="sans-serif" fontWeight="700" textAnchor="middle">0</text>
+              <text x="110" y="32" fill="#6b7280" fontSize="11" fontFamily="sans-serif" fontWeight="700" textAnchor="middle">75</text>
+              <text x="190" y="112" fill="#6b7280" fontSize="11" fontFamily="sans-serif" fontWeight="700" textAnchor="middle">150</text>
+            </svg>
+            <div style={{ width: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', marginTop: '4px' }}>
+              <span ref={velocityTextRef} style={{ color: '#fff', fontSize: '36px', fontWeight: 800, fontFamily: 'monospace', letterSpacing: '-0.05em', lineHeight: '36px' }}>0</span>
+              <span style={{ color: '#9ca3af', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: '2px' }}>km/h</span>
+            </div>
+          </div>
+        </div>
+        </Rnd>
+      )}
+      {showCompass && (
+        <Rnd
+          default={{ x: typeof window !== 'undefined' ? window.innerWidth - 344 : 0, y: 520, width: 320, height: 'auto' }}
+          bounds="parent"
+          enableResizing={false}
+          className="z-50"
+          style={{ zIndex: activeWindow === 'velocity' ? 60 : 50 }}
+          onDragStart={() => setActiveWindow && setActiveWindow('velocity')}
+          onMouseDown={() => setActiveWindow && setActiveWindow('velocity')}
+        >
+        <div style={{ width: '100%', height: '100%', background: 'linear-gradient(180deg, rgba(17,17,17,0.6) 0%, rgba(17,17,17,0.4) 100%)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.08)', padding: '16px', backdropFilter: 'blur(12px)', boxShadow: '0 8px 32px rgba(0,0,0,0.4)', pointerEvents: 'auto', cursor: 'grab' }} className="active:cursor-grabbing">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }} className="pointer-events-none">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Compass size={14} className="text-[#CCFF00]" />
+              <h3 style={{ color: '#fff', fontSize: '11px', fontWeight: 700, letterSpacing: '0.05em', margin: 0, fontFamily: 'sans-serif', textTransform: 'uppercase' }}>Heading</h3>
+            </div>
+            <button style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer', padding: '4px' }}>
+              <GripHorizontal size={14} />
+            </button>
+          </div>
+          
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', height: '170px' }} className="pointer-events-none">
+            <svg width="220" height="130" viewBox="0 0 220 130" style={{ overflow: 'visible' }}>
+              <circle cx="110" cy="65" r="55" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="8" />
+              <circle cx="110" cy="65" r="55" fill="none" stroke="#374151" strokeWidth="2" strokeDasharray="4 6" />
+              
+              <text x="110" y="22" fill="#9ca3af" fontSize="12" fontFamily="sans-serif" fontWeight="700" textAnchor="middle">N</text>
+              <text x="110" y="118" fill="#9ca3af" fontSize="12" fontFamily="sans-serif" fontWeight="700" textAnchor="middle">S</text>
+              <text x="63" y="70" fill="#9ca3af" fontSize="12" fontFamily="sans-serif" fontWeight="700" textAnchor="middle">W</text>
+              <text x="157" y="70" fill="#9ca3af" fontSize="12" fontFamily="sans-serif" fontWeight="700" textAnchor="middle">E</text>
+
+              <g ref={compassNeedleRef} style={{ transformOrigin: '110px 65px', transform: 'rotate(0deg)', willChange: 'transform', transition: 'transform 0.1s linear' }}>
+                <polygon points="106,65 114,65 110,15" fill="#ef4444" />
+                <polygon points="106,65 114,65 110,115" fill="#ffffff" />
+                <circle cx="110" cy="65" r="4" fill="#111" stroke="#ffffff" strokeWidth="2" />
+              </g>
+            </svg>
+            <div style={{ width: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', marginTop: '4px' }}>
+              <span ref={headingTextRef} style={{ color: '#fff', fontSize: '24px', fontWeight: 800, fontFamily: 'monospace', letterSpacing: '-0.05em', lineHeight: '24px' }}>N 0°</span>
             </div>
           </div>
         </div>
