@@ -135,6 +135,7 @@ export default function GlobeMap({
   const distanceTextRef = React.useRef<HTMLSpanElement>(null);
   const distanceTimeRef = React.useRef<HTMLSpanElement>(null);
   const fullSvgPathRef = React.useRef<SVGPathElement>(null);
+  const inactiveSvgPathRef = React.useRef<SVGPathElement>(null);
   const svgPathRef = React.useRef<SVGPathElement>(null);
   const osrmCacheRef = useRef<Record<string, [number, number][]>>({});
   
@@ -249,6 +250,20 @@ export default function GlobeMap({
              } else {
                fullSvgPathRef.current.setAttribute('d', '');
              }
+          }
+
+          const inactiveSegments: string[] = [];
+          for (const seg of inactiveRouteCoordsRef.current) {
+            const segPts: string[] = [];
+            for (const c of seg) {
+              if (!mapRef.current) continue;
+              const p = mapRef.current.project([c[0], c[1]]);
+              segPts.push(`${p.x},${p.y}`);
+            }
+            if (segPts.length > 0) inactiveSegments.push(`M ${segPts.join(' L ')}`);
+          }
+          if (inactiveSvgPathRef.current) {
+             inactiveSvgPathRef.current.setAttribute('d', inactiveSegments.join(' '));
           }
 
           const pts: string[] = [];
@@ -1028,7 +1043,7 @@ export default function GlobeMap({
           </linearGradient>
         </defs>
         <path ref={fullSvgPathRef} fill="none" stroke={animationProgress === 0 ? routeColor : 'rgba(255, 255, 255, 0.3)'} strokeWidth={routeWidth * 1.5 + 2} strokeLinecap="round" strokeLinejoin="round" />
-        
+        <path ref={inactiveSvgPathRef} fill="none" stroke={routeColor} strokeWidth={routeWidth * 1.5 + 2} strokeLinecap="round" strokeLinejoin="round" opacity={0.5} />
         <path ref={svgPathRef} fill="none" stroke="url(#routeGrad)" strokeWidth={routeWidth * 1.5} strokeLinecap="round" strokeLinejoin="round" style={{ filter: 'drop-shadow(0 0 8px rgba(204,255,0,0.8))' }} />
       </svg>
       <div 
