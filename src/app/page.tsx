@@ -178,7 +178,7 @@ export default function Home() {
         
         {/* Logo */}
         <div className="mb-2 pointer-events-none">
-          <img src="/logo.svg" alt="Logo" className="h-10 invert opacity-90 drop-shadow-md" />
+          <img src="/logo.svg" alt="Logo" className="h-14 invert opacity-90 drop-shadow-md" />
         </div>
 
         {/* Play Button */}
