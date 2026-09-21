@@ -41,8 +41,8 @@ interface GlobeMapProps {
   showCompass?: boolean;
   useGpsTrace?: boolean;
   onSeek?: (progress: number) => void;
-  activeWindow?: 'video' | 'elevation' | 'velocity' | null;
-  setActiveWindow?: (w: 'video' | 'elevation' | 'velocity') => void;
+  activeWindow?: 'video' | 'elevation' | 'velocity' | 'compass' | null;
+  setActiveWindow?: (w: 'video' | 'elevation' | 'velocity' | 'compass') => void;
   onPlayRoute?: (routeId: string) => void;
   onStopRoute?: () => void;
 }
@@ -329,15 +329,30 @@ export default function GlobeMap({
                  const wp1 = fullPts[pIdx];
                  const wp2 = fullPts[pIdx + 1];
                  if (wp1 && wp2) {
-                     const heading = headingOnPath(fullPts, currentProgress);
-                     let normalized = heading < 0 ? heading + 360 : heading;
+                     const rawHeading = headingOnPath(fullPts, currentProgress);
+                     let normalized = rawHeading < 0 ? rawHeading + 360 : rawHeading;
+                     
+                     if ((window as any)._smoothHeading === undefined) {
+                         (window as any)._smoothHeading = normalized;
+                     } else {
+                         let diff = normalized - (window as any)._smoothHeading;
+                         // Handle wraparound for shortest path
+                         while (diff > 180) diff -= 360;
+                         while (diff < -180) diff += 360;
+                         (window as any)._smoothHeading += diff * 0.05;
+                     }
+                     
+                     const currentHeading = (window as any)._smoothHeading;
+
                      if (compassNeedleRef.current) {
-                         compassNeedleRef.current.style.transform = `rotate(${normalized}deg)`;
+                         compassNeedleRef.current.style.transform = `rotate(${currentHeading}deg)`;
                      }
                      if (headingTextRef.current) {
                          const dirs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW", "N"];
-                         const idx = Math.round(normalized / 45);
-                         headingTextRef.current.textContent = `${dirs[idx]} ${Math.round(normalized)}°`;
+                         let displayHeading = Math.round(currentHeading) % 360;
+                         if (displayHeading < 0) displayHeading += 360;
+                         const idx = Math.round(displayHeading / 45) % 8;
+                         headingTextRef.current.textContent = `${dirs[idx]} ${displayHeading}°`;
                      }
                  }
              }
@@ -1218,9 +1233,9 @@ export default function GlobeMap({
           bounds="parent"
           enableResizing={false}
           className="z-50"
-          style={{ zIndex: activeWindow === 'velocity' ? 60 : 50 }}
-          onDragStart={() => setActiveWindow && setActiveWindow('velocity')}
-          onMouseDown={() => setActiveWindow && setActiveWindow('velocity')}
+          style={{ zIndex: activeWindow === 'compass' ? 60 : 50 }}
+          onDragStart={() => setActiveWindow && setActiveWindow('compass')}
+          onMouseDown={() => setActiveWindow && setActiveWindow('compass')}
         >
         <div style={{ width: '100%', height: '100%', background: 'linear-gradient(180deg, rgba(17,17,17,0.6) 0%, rgba(17,17,17,0.4) 100%)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.08)', padding: '16px', backdropFilter: 'blur(12px)', boxShadow: '0 8px 32px rgba(0,0,0,0.4)', pointerEvents: 'auto', cursor: 'grab' }} className="active:cursor-grabbing">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }} className="pointer-events-none">
@@ -1243,10 +1258,9 @@ export default function GlobeMap({
               <text x="63" y="70" fill="#9ca3af" fontSize="12" fontFamily="sans-serif" fontWeight="700" textAnchor="middle">W</text>
               <text x="157" y="70" fill="#9ca3af" fontSize="12" fontFamily="sans-serif" fontWeight="700" textAnchor="middle">E</text>
 
-              <g ref={compassNeedleRef} style={{ transformOrigin: '110px 65px', transform: 'rotate(0deg)', willChange: 'transform', transition: 'transform 0.1s linear' }}>
-                <polygon points="106,65 114,65 110,15" fill="#ef4444" />
-                <polygon points="106,65 114,65 110,115" fill="#ffffff" />
-                <circle cx="110" cy="65" r="4" fill="#111" stroke="#ffffff" strokeWidth="2" />
+              <g ref={compassNeedleRef} style={{ transformOrigin: '110px 65px', transform: 'rotate(0deg)', willChange: 'transform' }}>
+                {/* Navigation Arrow */}
+                <polygon points="110,25 125,75 110,65 95,75" fill="#ef4444" stroke="#ffffff" strokeWidth="2" strokeLinejoin="round" />
               </g>
             </svg>
             <div style={{ width: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', marginTop: '4px' }}>
