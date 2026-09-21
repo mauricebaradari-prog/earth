@@ -1164,7 +1164,7 @@ export default function GlobeMap({
       )}
       {showVelocity && (
         <Rnd
-          default={{ x: typeof window !== 'undefined' ? window.innerWidth - 344 : 0, y: 278, width: 320, height: 'auto' }}
+          default={{ x: typeof window !== 'undefined' ? window.innerWidth - 344 : 0, y: 192, width: 320, height: 'auto' }}
           bounds="parent"
           enableResizing={false}
           className="z-50"
@@ -1214,7 +1214,7 @@ export default function GlobeMap({
       )}
       {showCompass && (
         <Rnd
-          default={{ x: typeof window !== 'undefined' ? window.innerWidth - 344 : 0, y: 534, width: 320, height: 'auto' }}
+          default={{ x: typeof window !== 'undefined' ? window.innerWidth - 344 : 0, y: 448, width: 320, height: 'auto' }}
           bounds="parent"
           enableResizing={false}
           className="z-50"
