@@ -174,7 +174,7 @@ export default function Home() {
 
 
       {/* ── Floating Minimalist UI (Top Left) ── */}
-      <div className="absolute top-6 left-6 z-50 flex flex-col items-start gap-4">
+      <div className="absolute top-6 left-6 z-50 flex flex-col items-center gap-4">
         
         {/* Logo */}
         <div className="mb-2 pointer-events-none">
