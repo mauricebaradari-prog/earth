@@ -51,7 +51,7 @@ export default function Home() {
   const [openModal, setOpenModal] = useState<'none' | 'route' | 'speed' | 'camera'>('none');
   const [initialVideoPos, setInitialVideoPos] = useState<{ x: number; y: number } | null>(null);
   const [showElevation, setShowElevation] = useState(true);
-  const [showVelocity, setShowVelocity] = useState(true);
+  const [showVelocity, setShowVelocity] = useState(false);
   const [useGpsTrace, setUseGpsTrace] = useState(false);
 
   const {
