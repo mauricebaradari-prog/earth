@@ -281,16 +281,7 @@ export default function Home() {
                           : 'bg-white/5 text-white/70 border border-transparent hover:bg-white/10 hover:text-white'
                       }`}
                     >
-                      <div className="flex items-center gap-3">
-                        <div className="relative w-12 h-8 rounded shrink-0 overflow-hidden shadow-sm">
-                          <img 
-                            src={`https://img.youtube.com/vi/${r.videoId}/mqdefault.jpg`} 
-                            alt={r.name}
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
-                        <span>{r.name}</span>
-                      </div>
+                      <span>{r.name}</span>
                       <MiniElevationProfile routeId={r.id} active={state.activeRouteId === r.id} />
                     </button>
                   ))}
