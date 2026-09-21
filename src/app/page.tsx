@@ -1,5 +1,6 @@
 'use client';
 
+import sparklinesData from '../data/sparklines.json';
 import React, { useState } from 'react';
 import dynamic from 'next/dynamic';
 import { 
@@ -8,16 +9,50 @@ import {
 } from 'lucide-react';
 import { Video } from 'lucide-react';
 import { useEditorState } from '@/hooks/useEditorState';
-import GlobeMap from '@/components/GlobeMap';
+// import GlobeMap from '@/components/GlobeMap';
 import AnimationsPanel from '@/components/panels/AnimationsPanel';
 import CameraPanel from '@/components/panels/CameraPanel';
 
 const YouTubeOverlay = dynamic(() => import('@/components/YouTubeOverlay'), { ssr: false });
+const GlobeMap = dynamic(() => import('@/components/GlobeMap'), { ssr: false });
+function MiniElevationProfile({ routeId, active }: { routeId: string, active: boolean }) {
+  const elevations = (sparklinesData as any)[routeId] || Array(20).fill(0);
+  
+  // Find min and max for scaling
+  let min = Math.min(...elevations);
+  let max = Math.max(...elevations);
+  if (max === min) {
+    max = min + 10;
+  }
+  const range = max - min;
+  
+  const points = [];
+  const segments = elevations.length - 1;
+  
+  for (let i = 0; i <= segments; i++) {
+    const norm = (elevations[i] - min) / range; // 0 to 1
+    // scale to SVG height (0 to 16px, leaving padding)
+    points.push(`${i * (40 / segments)},${18 - norm * 14}`);
+  }
+  
+  const d = `M 0,20 L ${points.join(' L ')} L 40,20 Z`;
+  const strokeColor = active ? 'rgba(0,0,0,0.5)' : 'rgba(204,255,0,0.6)';
+  const fillColor = active ? 'rgba(0,0,0,0.1)' : 'rgba(204,255,0,0.1)';
+  
+  return (
+    <svg width="40" height="20" viewBox="0 0 40 20" className="opacity-90">
+      <path d={d} fill={fillColor} />
+      <path d={`M ${points.join(' L ')}`} fill="none" stroke={strokeColor} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
 
 export default function Home() {
   const [openModal, setOpenModal] = useState<'none' | 'route' | 'speed' | 'camera'>('none');
   const [initialVideoPos, setInitialVideoPos] = useState<{ x: number; y: number } | null>(null);
   const [showElevation, setShowElevation] = useState(true);
+  const [showVelocity, setShowVelocity] = useState(true);
+  const [useGpsTrace, setUseGpsTrace] = useState(false);
 
   const {
     state,
@@ -96,6 +131,7 @@ export default function Home() {
           routeColor={state.routeColor}
           routeWidth={state.routeWidth}
           showElevation={showElevation}
+          showVelocity={showVelocity}
           durationSeconds={state.durationSeconds}
           onSeek={handleSeek}
           activeWindow={state.activeWindow}
@@ -140,6 +176,11 @@ export default function Home() {
       {/* ── Floating Minimalist UI (Top Left) ── */}
       <div className="absolute top-6 left-6 z-50 flex flex-col items-start gap-4">
         
+        {/* Logo */}
+        <div className="mb-2 pointer-events-none">
+          <img src="/logo.svg" alt="Logo" className="h-10 invert opacity-90 drop-shadow-md" />
+        </div>
+
         {/* Play Button */}
         <button
           id="top-left-play-btn"
@@ -231,13 +272,14 @@ export default function Home() {
                         setActiveRoute(r.id);
                         setOpenModal('none');
                       }}
-                      className={`text-left px-3 py-2 text-sm rounded-lg transition-colors ${
+                      className={`text-left px-3 py-2 text-sm rounded-lg transition-colors w-full flex justify-between items-center ${
                         state.activeRouteId === r.id 
                           ? 'bg-[#CCFF00] text-black font-medium border border-transparent' 
                           : 'bg-white/5 text-white/70 border border-transparent hover:bg-white/10 hover:text-white'
                       }`}
                     >
-                      {r.name}
+                      <span>{r.name}</span>
+                      <MiniElevationProfile routeId={r.id} active={state.activeRouteId === r.id} />
                     </button>
                   ))}
                 </div>
