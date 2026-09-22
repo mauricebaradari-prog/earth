@@ -174,7 +174,7 @@ export default function Home() {
 
 
       {/* ── Left Gradient Backdrop ── */}
-      <div className="absolute top-0 left-0 bottom-0 w-64 bg-gradient-to-r from-black/80 via-black/40 to-transparent z-40 pointer-events-none" />
+      <div className="absolute top-0 left-0 bottom-0 w-64 bg-gradient-to-r from-black/80 via-black/40 to-transparent z-40 pointer-events-none hidden md:block" />
 
       {/* ── Floating Minimalist UI (Top Left) ── */}
       <div className="absolute top-6 left-6 z-50 flex flex-col items-center gap-4">
