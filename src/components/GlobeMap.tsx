@@ -451,10 +451,53 @@ export default function GlobeMap({
         data: { type: 'FeatureCollection', features: [] }
       });
     }
+    if (!map.getSource('active-route')) {
+      map.addSource('active-route', {
+        type: 'geojson',
+        lineMetrics: true,
+        data: { type: 'FeatureCollection', features: [] }
+      });
+    }
     if (!map.getSource('inactive-routes')) {
       map.addSource('inactive-routes', {
         type: 'geojson',
         data: { type: 'FeatureCollection', features: [] }
+      });
+    }
+    if (!map.getLayer('route-line')) {
+      map.addLayer({
+        id: 'route-line',
+        type: 'line',
+        source: 'route',
+        layout: {
+          'line-join': 'round',
+          'line-cap': 'round',
+        },
+        paint: {
+          'line-color': 'rgba(255,255,255,0.3)',
+          'line-width': width * 1.5 + 2,
+        },
+      });
+    }
+    if (!map.getLayer('active-route-line')) {
+      map.addLayer({
+        id: 'active-route-line',
+        type: 'line',
+        source: 'active-route',
+        layout: {
+          'line-join': 'round',
+          'line-cap': 'round',
+        },
+        paint: {
+          'line-width': width * 1.5,
+          'line-gradient': [
+            'interpolate',
+            ['linear'],
+            ['line-progress'],
+            0, '#FFFFFF',
+            1, color
+          ]
+        },
       });
     }
     if (!map.getLayer('inactive-routes-line')) {
@@ -932,6 +975,13 @@ export default function GlobeMap({
     vehicleLngLatRef.current = vehiclePoint as [number, number];
     routeCoordsRef.current = newActiveFeatures;
 
+    if (map.getSource('active-route')) {
+       (map.getSource('active-route') as GeoJSONSource).setData({
+         type: 'FeatureCollection',
+         features: newActiveFeatures
+       });
+    }
+
     
     if (cameraMode !== 'static' && progress > 0 && progress < 1) {
       let targetBearing = map.getBearing();
@@ -1044,7 +1094,7 @@ export default function GlobeMap({
     <div className="w-full h-full absolute inset-0 pointer-events-none z-0">
       <div className="w-full relative pointer-events-auto" style={{ height: isMobile ? "40vh" : "100%" }} ref={containerRef}>
             
-      <svg xmlns="http://www.w3.org/2000/svg" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 10 }}>
+      <svg xmlns="http://www.w3.org/2000/svg" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 10, display: isMobile ? 'none' : 'block' }}>
         <defs>
           <linearGradient id="routeGrad" x1="0" y1="0" x2="1" y2="0">
             <stop offset="0%" stopColor="#FFFFFF" />
