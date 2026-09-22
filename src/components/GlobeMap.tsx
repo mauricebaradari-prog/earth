@@ -960,8 +960,8 @@ export default function GlobeMap({
         // targetBearing = map.getBearing(); 
       }
       
-      // Zoom closer to the pin (13 instead of 8)
-      const targetZoom = Math.max(map.getZoom(), 12);
+      // Zoom significantly closer to the pin
+      const targetZoom = Math.max(map.getZoom(), 14);
       const targetPitch = Math.max(map.getPitch(), 45);
       const targetCenter = vehiclePoint as [number, number];
       
