@@ -177,11 +177,11 @@ export default function Home() {
       <div className="absolute top-0 left-0 bottom-0 w-64 bg-gradient-to-r from-black/80 via-black/40 to-transparent z-40 pointer-events-none hidden md:block" />
 
       {/* ── Floating Minimalist UI (Top Left) ── */}
-      <div className="absolute top-6 left-6 z-50 flex flex-col items-center gap-4">
+      <div className="absolute top-4 left-4 md:top-6 md:left-6 z-50 flex flex-col items-center gap-3 md:gap-4">
         
         {/* Logo */}
-        <div className="mb-2 pointer-events-none">
-          <img src="/routecam/logo.svg" alt="Logo" className="h-14 invert opacity-90 drop-shadow-md" />
+        <div className="mb-1 md:mb-2 pointer-events-none">
+          <img src="/routecam/logo.svg" alt="Logo" className="h-10 md:h-14 invert opacity-90 drop-shadow-md" />
         </div>
 
         {/* Play Button */}
