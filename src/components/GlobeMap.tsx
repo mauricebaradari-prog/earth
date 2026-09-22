@@ -116,10 +116,18 @@ export default function GlobeMap({
   const initialCameraRef = useRef<{center: {lng: number, lat: number}, zoom: number, pitch: number, bearing: number, timestamp: number} | null>(null);
   
   const renderPassRef = useRef<number>(0);
-          const [elevationProfile, setElevationProfile] = React.useState<number[] | null>(null);
-        const inactiveRouteCoordsRef = useRef<[number, number][][]>([]);
+  const [elevationProfile, setElevationProfile] = React.useState<number[] | null>(null);
+  const inactiveRouteCoordsRef = useRef<[number, number][][]>([]);
   const animProgressRef = useRef(animationProgress);
   const durationRef = useRef(durationSeconds);
+  
+  const [isMobile, setIsMobile] = React.useState(false);
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
   
   useEffect(() => {
     animProgressRef.current = animationProgress;
@@ -1242,7 +1250,7 @@ export default function GlobeMap({
         </div>
         </Rnd>
       )}
-      {showCompass && (
+      {showCompass && !isMobile && (
         <Rnd
           default={{ x: typeof window !== 'undefined' ? window.innerWidth - 344 : 0, y: showVelocity ? 448 : 192, width: 320, height: 'auto' }}
           bounds="parent"
