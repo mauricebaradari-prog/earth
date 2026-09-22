@@ -207,7 +207,7 @@ export default function YouTubeOverlay({ state, startAnimation, stopAnimation, i
   );
 
   const videoContent = (
-    <div className="w-full relative bg-black" style={{ height: 'calc(100% - 38px)' }}>
+    <div className="w-full relative bg-black" style={{ height: isMobile ? '100%' : 'calc(100% - 38px)' }}>
       <div id="youtube-player" className="absolute inset-0 w-full h-full"></div>
     </div>
   );
@@ -215,10 +215,9 @@ export default function YouTubeOverlay({ state, startAnimation, stopAnimation, i
   if (isMobile) {
     return (
       <div 
-        className="absolute left-0 w-full bg-black/90 backdrop-blur-md flex flex-col z-50 border-t border-b border-white/10" 
+        className="absolute left-0 w-full bg-black z-50 border-t border-b border-white/10" 
         style={{ top: '40vh', height: '35vh' }}
       >
-        {headerContent}
         {videoContent}
       </div>
     );
