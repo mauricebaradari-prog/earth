@@ -1,3 +1,4 @@
+import ErrorLogger from "@/components/ErrorLogger";
 import type { Metadata } from "next";
 import "./globals.css";
 
@@ -5,6 +6,28 @@ export const metadata: Metadata = {
   title: "Create your Travel Route Animation - Editor",
   description:
     "Open the free 3D travel map editor. No download, no registration. Select cities, choose vehicle and export video instantly.",
+  openGraph: {
+    title: "RouteCam - Travel Route Animation",
+    description: "Open the free 3D travel map editor. No download, no registration.",
+    url: "https://maurice-baradari.de/routecam/",
+    siteName: "RouteCam",
+    images: [
+      {
+        url: "https://maurice-baradari.de/routecam/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "RouteCam Preview",
+      },
+    ],
+    locale: "de_DE",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "RouteCam - Travel Route Animation",
+    description: "Open the free 3D travel map editor. No download, no registration.",
+    images: ["https://maurice-baradari.de/routecam/og-image.png"],
+  },
 };
 
 export const viewport = {
@@ -25,7 +48,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         {/* eslint-disable-next-line @next/next/no-page-custom-font */}
         <link rel="stylesheet" href="/maplibre-gl.css" />
       </head>
-      <body className="h-full antialiased font-sans">{children}</body>
+      <body className="h-full antialiased font-sans">
+        <ErrorLogger />
+        {children}
+      </body>
     </html>
   );
 }
