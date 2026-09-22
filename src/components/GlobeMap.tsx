@@ -1098,9 +1098,11 @@ export default function GlobeMap({
                 <span>{Math.floor(durationSeconds / 60)}M {durationSeconds % 60}S</span>
               </div>
             </div>
-            <button style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer', padding: '4px' }}>
-              <GripHorizontal size={14} />
-            </button>
+            {!isMobile && (
+              <button style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer', padding: '4px' }}>
+                <GripHorizontal size={14} />
+              </button>
+            )}
           </div>
           
           <div style={{ position: 'relative', height: '60px', width: '100%' }}>
