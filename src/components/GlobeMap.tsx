@@ -243,18 +243,25 @@ export default function GlobeMap({
           
           // Decimate for performance
           const step = Math.max(1, Math.floor(fullPts.length / 500));
-          const screenPts = [];
+          const screenPts: string[] = [];
+          let lastP: any = null;
+          const pushPt = (p: any, arr: string[]) => {
+              if (!lastP) arr.push(`M ${p.x},${p.y}`);
+              else if (Math.hypot(p.x - lastP.x, p.y - lastP.y) > window.innerWidth / 2) arr.push(`M ${p.x},${p.y}`);
+              else arr.push(`L ${p.x},${p.y}`);
+              lastP = p;
+          };
           for (let i = 0; i < fullPts.length; i += step) {
              const p = mapRef.current.project([fullPts[i][0], fullPts[i][1]]);
-             screenPts.push(`${p.x},${p.y}`);
+             pushPt(p, screenPts);
           }
           if (fullPts.length > 0 && (fullPts.length - 1) % step !== 0) {
              const p = mapRef.current.project([fullPts[fullPts.length - 1][0], fullPts[fullPts.length - 1][1]]);
-             screenPts.push(`${p.x},${p.y}`);
+             pushPt(p, screenPts);
           }
           if (fullSvgPathRef.current) {
              if (screenPts.length > 0) {
-               fullSvgPathRef.current.setAttribute('d', `M ${screenPts.join(' L ')}`);
+               fullSvgPathRef.current.setAttribute('d', screenPts.join(' '));
              } else {
                fullSvgPathRef.current.setAttribute('d', '');
              }
@@ -263,35 +270,46 @@ export default function GlobeMap({
           const inactiveSegments: string[] = [];
           for (const seg of inactiveRouteCoordsRef.current) {
             const segPts: string[] = [];
+            let lastP: any = null;
             for (const c of seg) {
               if (!mapRef.current) continue;
               const p = mapRef.current.project([c[0], c[1]]);
-              segPts.push(`${p.x},${p.y}`);
+              if (!lastP) segPts.push(`M ${p.x},${p.y}`);
+              else if (Math.hypot(p.x - lastP.x, p.y - lastP.y) > window.innerWidth / 2) segPts.push(`M ${p.x},${p.y}`);
+              else segPts.push(`L ${p.x},${p.y}`);
+              lastP = p;
             }
-            if (segPts.length > 0) inactiveSegments.push(`M ${segPts.join(' L ')}`);
+            if (segPts.length > 0) inactiveSegments.push(segPts.join(' '));
           }
           if (inactiveSvgPathRef.current) {
              inactiveSvgPathRef.current.setAttribute('d', inactiveSegments.join(' '));
           }
 
           const pts: string[] = [];
+          let lastActiveP: any = null;
           routeCoordsRef.current.forEach((feat) => {
             if (feat.geometry.type === 'LineString') {
                const coords = feat.geometry.coordinates as [number, number][];
                const rStep = Math.max(1, Math.floor(coords.length / 500));
                for (let i = 0; i < coords.length; i += rStep) {
                  const p = mapRef.current!.project([coords[i][0], coords[i][1]]);
-                 pts.push(`${p.x},${p.y}`);
+                 if (!lastActiveP) pts.push(`M ${p.x},${p.y}`);
+                 else if (Math.hypot(p.x - lastActiveP.x, p.y - lastActiveP.y) > window.innerWidth / 2) pts.push(`M ${p.x},${p.y}`);
+                 else pts.push(`L ${p.x},${p.y}`);
+                 lastActiveP = p;
                }
                if (coords.length > 0 && (coords.length - 1) % rStep !== 0) {
                  const p = mapRef.current!.project([coords[coords.length - 1][0], coords[coords.length - 1][1]]);
-                 pts.push(`${p.x},${p.y}`);
+                 if (!lastActiveP) pts.push(`M ${p.x},${p.y}`);
+                 else if (Math.hypot(p.x - lastActiveP.x, p.y - lastActiveP.y) > window.innerWidth / 2) pts.push(`M ${p.x},${p.y}`);
+                 else pts.push(`L ${p.x},${p.y}`);
+                 lastActiveP = p;
                }
             }
           });
           if (svgPathRef.current) {
             if (pts.length > 0) {
-              svgPathRef.current.setAttribute('d', `M ${pts.join(' L ')}`);
+              svgPathRef.current.setAttribute('d', pts.join(' '));
             } else {
               svgPathRef.current.setAttribute('d', '');
             }
@@ -451,53 +469,10 @@ export default function GlobeMap({
         data: { type: 'FeatureCollection', features: [] }
       });
     }
-    if (!map.getSource('active-route')) {
-      map.addSource('active-route', {
-        type: 'geojson',
-        lineMetrics: true,
-        data: { type: 'FeatureCollection', features: [] }
-      });
-    }
     if (!map.getSource('inactive-routes')) {
       map.addSource('inactive-routes', {
         type: 'geojson',
         data: { type: 'FeatureCollection', features: [] }
-      });
-    }
-    if (!map.getLayer('route-line')) {
-      map.addLayer({
-        id: 'route-line',
-        type: 'line',
-        source: 'route',
-        layout: {
-          'line-join': 'round',
-          'line-cap': 'round',
-        },
-        paint: {
-          'line-color': 'rgba(255,255,255,0.3)',
-          'line-width': width * 1.5 + 2,
-        },
-      });
-    }
-    if (!map.getLayer('active-route-line')) {
-      map.addLayer({
-        id: 'active-route-line',
-        type: 'line',
-        source: 'active-route',
-        layout: {
-          'line-join': 'round',
-          'line-cap': 'round',
-        },
-        paint: {
-          'line-width': width * 1.5,
-          'line-gradient': [
-            'interpolate',
-            ['linear'],
-            ['line-progress'],
-            0, '#FFFFFF',
-            1, color
-          ]
-        },
       });
     }
     if (!map.getLayer('inactive-routes-line')) {
@@ -975,13 +950,6 @@ export default function GlobeMap({
     vehicleLngLatRef.current = vehiclePoint as [number, number];
     routeCoordsRef.current = newActiveFeatures;
 
-    if (map.getSource('active-route')) {
-       (map.getSource('active-route') as GeoJSONSource).setData({
-         type: 'FeatureCollection',
-         features: newActiveFeatures
-       });
-    }
-
     
     if (cameraMode !== 'static' && progress > 0 && progress < 1) {
       let targetBearing = map.getBearing();
@@ -1094,7 +1062,7 @@ export default function GlobeMap({
     <div className="w-full h-full absolute inset-0 pointer-events-none z-0">
       <div className="w-full relative pointer-events-auto" style={{ height: isMobile ? "40vh" : "100%" }} ref={containerRef}>
             
-      <svg xmlns="http://www.w3.org/2000/svg" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 10, display: isMobile ? 'none' : 'block' }}>
+      <svg xmlns="http://www.w3.org/2000/svg" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 10 }}>
         <defs>
           <linearGradient id="routeGrad" x1="0" y1="0" x2="1" y2="0">
             <stop offset="0%" stopColor="#FFFFFF" />
