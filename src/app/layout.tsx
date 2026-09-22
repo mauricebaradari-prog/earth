@@ -13,7 +13,7 @@ export const metadata: Metadata = {
     siteName: "RouteCam",
     images: [
       {
-        url: "https://maurice-baradari.de/routecam/og-image.png",
+        url: "https://maurice-baradari.de/routecam/og-image.jpg",
         width: 1200,
         height: 630,
         alt: "RouteCam Preview",
@@ -26,7 +26,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "RouteCam - Travel Route Animation",
     description: "Open the free 3D travel map editor. No download, no registration.",
-    images: ["https://maurice-baradari.de/routecam/og-image.png"],
+    images: ["https://maurice-baradari.de/routecam/og-image.jpg"],
   },
 };
 
