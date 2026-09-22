@@ -1169,13 +1169,24 @@ export default function GlobeMap({
                       height="100%" 
                       viewBox="0 0 100 100" 
                       preserveAspectRatio="none" 
-                      style={{ overflow: 'visible', cursor: onSeek ? 'pointer' : 'default', pointerEvents: 'auto' }}
+                      className="cancel-drag"
+                      style={{ overflow: 'visible', cursor: onSeek ? 'pointer' : 'default', pointerEvents: 'auto', touchAction: 'none' }}
                       onClick={(e) => {
                         if (!onSeek) return;
                         const rect = e.currentTarget.getBoundingClientRect();
                         let p = (e.clientX - rect.left) / rect.width;
                         p = Math.max(0, Math.min(1, p));
                         onSeek(p);
+                      }}
+                      onTouchEnd={(e) => {
+                        if (!onSeek) return;
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        const touch = e.changedTouches[0];
+                        if (touch) {
+                          let p = (touch.clientX - rect.left) / rect.width;
+                          p = Math.max(0, Math.min(1, p));
+                          onSeek(p);
+                        }
                       }}
                     >
                       <defs>
