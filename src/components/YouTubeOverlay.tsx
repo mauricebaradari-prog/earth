@@ -41,13 +41,17 @@ export default function YouTubeOverlay({ state, startAnimation, stopAnimation, i
           disablekb: 1,
           rel: 0,
           showinfo: 0,
-          origin: 'http://localhost:3005'
+          origin: 'http://localhost:3005',
+          vq: isMobile ? 'hd1080' : undefined
         },
         events: {
           'onReady': () => { 
             setIsReady(true); 
             (window as any).__YT_PLAYER = playerRef.current; 
             try {
+              if (isMobile && playerRef.current.setPlaybackQuality) {
+                 playerRef.current.setPlaybackQuality('hd1080');
+              }
               const data = playerRef.current.getVideoData();
               if (data && data.title) {
                 setVideoTitle(data.title);
@@ -55,6 +59,12 @@ export default function YouTubeOverlay({ state, startAnimation, stopAnimation, i
             } catch(e) {}
           },
           'onStateChange': (event: any) => {
+            try {
+              if (isMobile && event.data === 1 && playerRef.current.setPlaybackQuality) {
+                 playerRef.current.setPlaybackQuality('hd1080');
+              }
+            } catch(e) {}
+            
             if (isInternalChange.current || (window as any).__IS_SCRUBBING) return;
             const isPlaying = event.data === 1;
             const isPaused = event.data === 2;
