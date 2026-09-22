@@ -1041,7 +1041,8 @@ export default function GlobeMap({
 
 
   return (
-    <div className="w-full h-full relative" ref={containerRef}>
+    <div className="w-full h-full absolute inset-0 pointer-events-none z-0">
+      <div className="w-full relative pointer-events-auto" style={{ height: isMobile ? "40vh" : "100%" }} ref={containerRef}>
             
       <svg xmlns="http://www.w3.org/2000/svg" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 10 }}>
         <defs>
@@ -1081,18 +1082,10 @@ export default function GlobeMap({
         <span ref={distanceTimeRef} className="text-white/70 text-[10px] font-medium uppercase tracking-wider">0m 0s</span>
       </div>
       
-      
-      {showElevation && elevationProfile && (
-        <Rnd
-          default={{ x: typeof window !== 'undefined' ? window.innerWidth - 344 : 0, y: 24, width: 320, height: 'auto' }}
-          bounds="parent"
-          enableResizing={false}
-          className="z-50"
-          style={{ zIndex: activeWindow === 'elevation' ? 60 : 50 }}
-          onDragStart={() => setActiveWindow && setActiveWindow('elevation')}
-          onMouseDown={() => setActiveWindow && setActiveWindow('elevation')}
-        >
-        <div style={{ width: '100%', height: '100%', background: 'linear-gradient(180deg, rgba(17,17,17,0.6) 0%, rgba(17,17,17,0.4) 100%)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.08)', padding: '16px', backdropFilter: 'blur(12px)', boxShadow: '0 8px 32px rgba(0,0,0,0.4)', pointerEvents: 'auto', cursor: 'grab' }} className="active:cursor-grabbing">
+      </div>
+      {showElevation && elevationProfile && (() => {
+        const content = (
+          <div style={{ width: '100%', height: '100%', background: 'linear-gradient(180deg, rgba(17,17,17,0.6) 0%, rgba(17,17,17,0.4) 100%)', borderRadius: isMobile ? '0' : '12px', border: isMobile ? 'none' : '1px solid rgba(255,255,255,0.08)', padding: '16px', backdropFilter: 'blur(12px)', boxShadow: '0 8px 32px rgba(0,0,0,0.4)', pointerEvents: 'auto', cursor: isMobile ? 'default' : 'grab' }} className={isMobile ? "" : "active:cursor-grabbing"}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }} className="pointer-events-none">
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
@@ -1208,9 +1201,28 @@ export default function GlobeMap({
             </div>
           </div>
         </div>
-        </Rnd>
-
-      )}
+        );
+        if (isMobile) {
+          return (
+            <div className="absolute left-0 w-full pointer-events-auto bg-black/90 z-50 border-t border-white/10" style={{ top: '75vh', height: '25vh' }}>
+              {content}
+            </div>
+          );
+        }
+        return (
+          <Rnd
+            default={{ x: typeof window !== 'undefined' ? window.innerWidth - 344 : 0, y: 24, width: 320, height: 'auto' }}
+            bounds="parent"
+            enableResizing={false}
+            className="z-50"
+            style={{ zIndex: activeWindow === 'elevation' ? 60 : 50 }}
+            onDragStart={() => setActiveWindow && setActiveWindow('elevation')}
+            onMouseDown={() => setActiveWindow && setActiveWindow('elevation')}
+          >
+            {content}
+          </Rnd>
+        );
+      })()}
       {showVelocity && (
         <Rnd
           default={{ x: typeof window !== 'undefined' ? window.innerWidth - 344 : 0, y: 192, width: 320, height: 'auto' }}

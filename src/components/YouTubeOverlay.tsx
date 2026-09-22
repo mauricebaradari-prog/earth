@@ -15,7 +15,7 @@ export default function YouTubeOverlay({ state, startAnimation, stopAnimation, i
     x: typeof window !== 'undefined' ? window.innerWidth - 360 : 400, 
     y: 40 
   });
-  const [size, setSize] = useState({ width: 320, height: 204 });
+  const [size, setSize] = useState({ width: 320, height: 218 });
   const hasSetInitial = useRef(false);
   const [isPositioned, setIsPositioned] = useState(false);
   const [videoTitle, setVideoTitle] = useState("YOUTUBE VIDEO");
@@ -62,9 +62,19 @@ export default function YouTubeOverlay({ state, startAnimation, stopAnimation, i
             const currentState = (window as any).__EDITOR_STATE;
             
             if (isPlaying && !currentState.isAnimating) {
-              startAnimation();
+              if (!(window as any).__yt_throttle_play) {
+                (window as any).__yt_throttle_play = setTimeout(() => {
+                  startAnimation();
+                  (window as any).__yt_throttle_play = null;
+                }, 100);
+              }
             } else if ((isPaused || isBuffering) && currentState.isAnimating) {
-              stopAnimation();
+              if (!(window as any).__yt_throttle_pause) {
+                (window as any).__yt_throttle_pause = setTimeout(() => {
+                  stopAnimation();
+                  (window as any).__yt_throttle_pause = null;
+                }, 100);
+              }
             }
           }
         }
@@ -174,6 +184,46 @@ export default function YouTubeOverlay({ state, startAnimation, stopAnimation, i
     }
   }, [state.animSpeed]);
 
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const headerContent = (
+    <div className="drag-handle w-full flex items-center justify-between cursor-move text-white/50 hover:text-white/90 transition-colors px-3" style={{ height: '38px', minHeight: '38px', flexShrink: 0 }}>
+      <div className="flex flex-col justify-center overflow-hidden mr-2 pointer-events-none select-none h-full pt-0.5">
+        <span className="text-white text-[11px] font-bold tracking-wide uppercase opacity-80 truncate">
+          {videoTitle}
+        </span>
+        <span className="text-[#CCFF00]/80 text-[8px] tracking-wider uppercase font-medium truncate mt-[-1px]">
+          *Video might not be 100% synced with route
+        </span>
+      </div>
+      {!isMobile && <GripHorizontal size={20} className="shrink-0" />}
+    </div>
+  );
+
+  const videoContent = (
+    <div className="w-full relative bg-black" style={{ height: 'calc(100% - 38px)' }}>
+      <div id="youtube-player" className="absolute inset-0 w-full h-full"></div>
+    </div>
+  );
+
+  if (isMobile) {
+    return (
+      <div 
+        className="absolute left-0 w-full bg-black/90 backdrop-blur-md flex flex-col z-50 border-t border-b border-white/10" 
+        style={{ top: '40vh', height: '35vh' }}
+      >
+        {headerContent}
+        {videoContent}
+      </div>
+    );
+  }
+
   return (
     <Rnd
       position={{ x: pos.x, y: pos.y }}
@@ -184,9 +234,9 @@ export default function YouTubeOverlay({ state, startAnimation, stopAnimation, i
         setPos(position);
       }}
       minWidth={200}
-      minHeight={136}
+      minHeight={150}
       lockAspectRatio={16/9}
-      lockAspectRatioExtraHeight={24}
+      lockAspectRatioExtraHeight={38}
       bounds="parent"
       dragHandleClassName="drag-handle"
       className={`rounded-xl overflow-hidden shadow-[0_25px_50px_-12px_rgba(0,0,0,0.8),0_0_30px_rgba(0,0,0,0.5)] border border-white/20 bg-black/60 backdrop-blur-md flex flex-col transition-opacity duration-1000 ${isPositioned ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
@@ -194,16 +244,8 @@ export default function YouTubeOverlay({ state, startAnimation, stopAnimation, i
       onDragStart={() => setActiveWindow && setActiveWindow('video')}
       onMouseDown={() => setActiveWindow && setActiveWindow('video')}
     >
-      <div className="drag-handle w-full flex items-center justify-between cursor-move text-white/50 hover:text-white/90 transition-colors px-3" style={{ height: '24px', minHeight: '24px', flexShrink: 0 }}>
-        <span className="text-white text-[11px] font-bold tracking-wide uppercase opacity-80 truncate mr-2 pointer-events-none select-none">
-          {videoTitle}
-        </span>
-        <GripHorizontal size={20} className="shrink-0" />
-      </div>
-      {/* Container for the iframe to maintain exact 16:9 inner ratio */}
-      <div className="w-full relative bg-black" style={{ height: 'calc(100% - 24px)' }}>
-        <div id="youtube-player" className="absolute inset-0 w-full h-full"></div>
-      </div>
+      {headerContent}
+      {videoContent}
     </Rnd>
   );
 }
